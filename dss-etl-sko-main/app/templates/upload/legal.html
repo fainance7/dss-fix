@@ -1,0 +1,23 @@
+{% extends "upload/base_upload.html" %}
+{% block title %}База юрлиц{% endblock %}
+{% block breadcrumb %}Upload / База юрлиц{% endblock %}
+{% block page_title %}База юридических лиц{% endblock %}
+{% block content %}
+<div class="card">
+    <div class="card-title"><span>🏢</span> Поиск по БИН или названию</div>
+    <p style="font-size:12px;color:var(--text-muted);margin-bottom:12px">
+        ГБД ЮЛ- Проверка статуса предприятия, ОКЭД, размерности.
+    </p>
+    <div style="display:flex;gap:8px;margin-bottom:16px">
+        <input id="legal-query" type="text" placeholder="БИН, название компании или ФИО руководителя"
+               style="flex:1;padding:8px 12px;border:1px solid var(--border-color,#ddd);border-radius:6px;font-size:14px">
+        <button id="legal-search-btn" style="padding:8px 20px;background:var(--accent-blue,#3b82f6);
+                color:#fff;border:none;border-radius:6px;cursor:pointer">Найти</button>
+    </div>
+    <div id="legal-status" style="font-size:12px;color:var(--text-muted);margin-bottom:12px"></div>
+    <div id="legal-results"></div>
+</div>
+{% endblock %}
+{% block extra_head %}
+<script src="/static/js/legal.js" defer></script>
+{% endblock %}

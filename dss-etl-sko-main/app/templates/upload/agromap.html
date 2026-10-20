@@ -1,0 +1,63 @@
+{% extends "upload/base_upload.html" %}
+
+{% block title %}Земельные ресурсы СКО{% endblock %}
+{% block breadcrumb %}Upload / Земельные ресурсы (СКО){% endblock %}
+{% block page_title %}Карта земельного фонда СКО{% endblock %}
+
+{% block extra_head %}
+<link href="/static/vendor/maplibre-gl/maplibre-gl.css" rel="stylesheet" />
+<script src="/static/vendor/maplibre-gl/maplibre-gl.js"></script>
+<style>
+    #agromap-container { display: flex; gap: 16px; height: calc(100vh - 160px); }
+    #agromap-map { flex: 1; border-radius: 8px; }
+    #agromap-sidebar { width: 320px; overflow-y: auto; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div id="agromap-container">
+    <div id="agromap-map"></div>
+    <div id="agromap-sidebar">
+	<div class="card" style="margin-bottom: 12px;">
+            <label style="display:flex; align-items:center; gap:8px; cursor:pointer;">
+                <input type="checkbox" id="unit-toggle">
+                <span>Показывать в км²</span>
+            </label>
+        </div>
+        <div class="card" style="margin-bottom: 12px;">
+            <div class="card-title"><span>▦</span> Типы угодий</div>
+            <div id="agromap-layers"></div>
+        </div>
+	<div class="card" style="margin-bottom: 12px;">
+            <div class="card-title"><span>⌕</span> Фильтры</div>
+            <div class="form-group">
+                <label class="form-label">Район</label>
+                <select class="form-control" id="district-select">
+                    <option value="">Все районы</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Сельский округ</label>
+                <select class="form-control" id="village-select" disabled>
+                    <option value="">Все округа</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Площадь участка (га): от <span id="area-min-label">0</span> до <span id="area-max-label">1000+</span></label>
+                <input type="range" id="area-min-slider" min="0" max="1000" value="0" style="width:100%">
+                <input type="range" id="area-max-slider" min="0" max="1000" value="1000" style="width:100%">
+            </div>
+            <button id="apply-location-filter" class="btn-link" style="margin-top:8px;">Применить</button>
+            <button id="reset-location-filter" class="btn-link">Сбросить</button>
+        </div>
+        <div class="card">
+            <div class="card-title"><span>◎</span> Сводка по экрану</div>
+            <div id="agromap-stats">Загрузка...</div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="/static/js/agromap.js"></script>
+{% endblock %}

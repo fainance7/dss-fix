@@ -1,0 +1,351 @@
+version: "3.9"
+
+networks:
+  dss-net:
+    driver: bridge
+  proxy-net:
+    external: true
+
+volumes:
+  postgres_data:
+  redis_data:
+  backup_data:
+  ollama_data:
+  cog_data:
+
+services:
+  postgres:
+    image: postgis/postgis:15-3.3
+    container_name: dss-postgres
+    restart: unless-stopped
+    # PITR (G14): непрерывное архивирование WAL в /wal_archive (bind-mount
+    # ./wal_archive, каталог должен принадлежать uid 999 — см. docs/pitr_restore.md).
+    # archive_mode=on требует перезапуска postgres. wal_level=replica — дефолт PG15.
+    command:
+      - "postgres"
+      - "-c"
+      - "wal_level=replica"
+      - "-c"
+      - "archive_mode=on"
+      - "-c"
+      - "archive_command=test ! -f /wal_archive/%f && cp %p /wal_archive/%f"
+      - "-c"
+      - "archive_timeout=300"
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      # Ретеншн PITR (используется scripts/pg_basebackup.sh при запуске в этом контейнере)
+      PITR_BASE_RETENTION_DAYS: ${PITR_BASE_RETENTION_DAYS:-7}
+      PITR_WAL_RETENTION_DAYS: ${PITR_WAL_RETENTION_DAYS:-8}
+    ports:
+      # Только localhost: СУБД наружу не публикуем (инцидент 2026-09-10).
+      # Сервисы ходят на postgres:5432 внутри dss-net; с dev-машины — через SSH-туннель.
+      - "127.0.0.1:5433:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./migrations:/docker-entrypoint-initdb.d:ro
+      - ./wal_archive:/wal_archive
+      - ./basebackups:/basebackups
+      # Базовый бэкол запускается ЛОКАЛЬНО внутри контейнера (local replication
+      # trust), поэтому скрипт монтируется сюда: `docker exec dss-postgres sh /pg_basebackup.sh`.
+      - ./scripts/pg_basebackup.sh:/pg_basebackup.sh:ro
+    networks:
+      - dss-net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  redis:
+    image: redis:7-alpine
+    container_name: dss-redis
+    restart: unless-stopped
+    ports:
+      # Только localhost: наружу кэш не публикуем (инцидент 2026-09-10).
+      # Сервисы ходят по имени redis:6379 внутри dss-net.
+      - "127.0.0.1:6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - dss-net
+    environment:
+      # На проде значение задаётся в .env; дефолт — только для локальной разработки.
+      REDIS_PASSWORD: ${REDIS_PASSWORD?REDIS_PASSWORD must be set in .env (audit M-2)}
+    command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD?REDIS_PASSWORD must be set in .env (audit M-2)}
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli -a \"$$REDIS_PASSWORD\" ping | grep -q PONG"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: dss-backend
+    restart: unless-stopped
+    ports:
+      # Только localhost (аудит безопасности, H-3): снаружи — через Caddy по именам
+      # контейнеров; порт хоста нужен лишь для отладки на сервере.
+      - "127.0.0.1:8000:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    env_file:
+      - .env
+    environment:
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      REDIS_URL: redis://:${REDIS_PASSWORD?REDIS_PASSWORD must be set in .env (audit M-2)}@redis:6379/0
+      MAPS_DIR: /maps
+      INTAKE_TEMPLATE_PATH: /app/manuals/data_intake_template.xlsx
+      INTAKE_PROTOCOL_PATH: /app/manuals/data_intake_protocol.md
+    networks:
+      - dss-net
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    volumes:
+      - ./maps:/maps:ro
+      - ./manuals:/app/manuals:ro
+      # COG-файлы растров GIS: backend их заливает (ingest), titiler читает.
+      - cog_data:/data/cogs
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: dss-frontend
+    restart: unless-stopped
+    ports:
+      # Только localhost (аудит безопасности, H-3): снаружи — через Caddy по именам
+      # контейнеров; порт хоста нужен лишь для отладки на сервере.
+      - "127.0.0.1:3010:3000"
+    depends_on:
+      backend:
+        condition: service_healthy
+    environment:
+      BACKEND_URL: http://backend:8000
+      AI_SERVICE_URL: http://ai-service:8001
+      NEXT_PUBLIC_MARTIN_URL: http://localhost:3001
+    networks:
+      - dss-net
+      - proxy-net
+
+  ai-service:
+    build:
+      context: ./ai-service
+      dockerfile: Dockerfile
+    container_name: dss-ai-service
+    restart: unless-stopped
+    ports:
+      # Только localhost (аудит безопасности, H-3): снаружи — через Caddy по именам
+      # контейнеров; порт хоста нужен лишь для отладки на сервере.
+      - "127.0.0.1:8001:8001"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    env_file:
+      - .env
+    environment:
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      REDIS_URL: redis://:${REDIS_PASSWORD?REDIS_PASSWORD must be set in .env (audit M-2)}@redis:6379/0
+      BACKEND_URL: http://backend:8000
+      LLM_BASE_URL: ${LLM_BASE_URL:-http://ollama:11434/v1}
+      LLM_MODEL: ${LLM_MODEL:-qwen2.5:3b-instruct-q4_K_M}
+      LLM_TIMEOUT_SECONDS: ${LLM_TIMEOUT_SECONDS:-1200}
+    networks:
+      - dss-net
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8001/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  # ── Ollama: автономный LLM inference (требование безопасности — никаких внешних API) ──
+  # На dev-машинах работает на CPU. Для прод-сервера с GPU добавить в
+  # docker-compose.prod.yml блок:
+  #   deploy:
+  #     resources:
+  #       reservations:
+  #         devices:
+  #           - driver: nvidia
+  #             count: 1
+  #             capabilities: [gpu]
+  # и установить nvidia-container-toolkit на хосте.
+  ollama:
+    # 0.9.6: закрыты уязвимости 0.4.x–0.6.x (аудит безопасности). Резервный узел
+    # инференса — основной на сервере с ускорителем; CI не перезапускает ollama,
+    # обновление на проде — вручную: docker compose ... pull ollama && up -d ollama.
+    image: ollama/ollama:0.9.6
+    container_name: dss-ollama
+    restart: unless-stopped
+    ports:
+      # Только localhost: LLM API без аутентификации, наружу не публикуем
+      # (инцидент 2026-09-10). Потребители ходят на ollama:11434 внутри dss-net.
+      - "127.0.0.1:11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+    environment:
+      # Держать модель загруженной в память между запросами (по умолчанию Ollama
+      # выгружает через 5 мин idle → холодная перезагрузка на каждый новый запрос).
+      OLLAMA_KEEP_ALIVE: ${OLLAMA_KEEP_ALIVE:-24h}
+      # На CPU параллельные запросы не ускоряют (делят ядра), но дробят контекст
+      # (ctx-size / N на слот). NUM_PARALLEL=1 → каждый нарратив получает полный
+      # контекст, направления обрабатываются по очереди. На GPU можно поднять.
+      OLLAMA_NUM_PARALLEL: ${OLLAMA_NUM_PARALLEL:-1}
+    networks:
+      - dss-net
+    healthcheck:
+      test: ["CMD-SHELL", "ollama list >/dev/null 2>&1 || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+
+  # Однократный init-контейнер: подтягивает модель в ollama_data при первом старте.
+  # Запускается вручную: docker-compose --profile init up ollama-init
+  ollama-init:
+    image: ollama/ollama:0.9.6
+    container_name: dss-ollama-init
+    depends_on:
+      ollama:
+        condition: service_healthy
+    networks:
+      - dss-net
+    environment:
+      OLLAMA_HOST: http://ollama:11434
+      LLM_MODEL: ${LLM_MODEL:-qwen2.5:3b-instruct-q4_K_M}
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        echo "Pulling LLM model: $$LLM_MODEL"
+        ollama pull "$$LLM_MODEL"
+        ollama list
+    profiles:
+      - init
+
+  # ── Martin tile-server (задача 2.8) ─────────────────────────
+  martin:
+    image: ghcr.io/maplibre/martin:v0.13.0
+    container_name: dss-martin
+    restart: unless-stopped
+    ports:
+      # Только localhost (аудит безопасности, H-3): снаружи — через Caddy по именам
+      # контейнеров; порт хоста нужен лишь для отладки на сервере.
+      - "127.0.0.1:3001:3001"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      FRONTEND_URL: http://localhost:3000
+    volumes:
+      - ./martin/config.yaml:/config.yaml:ro
+    command: ["--config", "/config.yaml"]
+    networks:
+      - dss-net
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:3001/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+  # ── TiTiler: динамический тайлер растров (COG) ──────────────
+  # Читает одноканальные float-COG датасетов GIS из тома cog_data и отдаёт
+  # тайлы с colormap+rescale. Backend проксирует /api/v1/gis/raster/* сюда.
+  # Наружу не публикуется — только внутренняя сеть dss-net (порт 8000).
+  titiler:
+    image: ghcr.io/developmentseed/titiler:2.0.5
+    container_name: dss-titiler
+    restart: unless-stopped
+    environment:
+      # Образ по умолчанию слушает :80 — переводим на :8000 (как в TITILER_URL).
+      PORT: "8000"
+      # Разрешаем локальные файлы и типовые растровые расширения для GDAL.
+      CPL_TMPDIR: /tmp
+      GDAL_CACHEMAX: "200"
+      GDAL_DISABLE_READDIR_ON_OPEN: EMPTY_DIR
+      TITILER_API_CORS_ORIGINS: "*"
+    volumes:
+      - cog_data:/data/cogs:ro
+    networks:
+      - dss-net
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/healthz').status==200 else 1)"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+  # ── NCANode: проверка ЭЦП НУЦ РК (CR-2) ──────────────────────
+  # Криптопроверка CMS-подписи (вкл. ГОСТ) + цепочка + отзыв. Только во внутренней
+  # сети dss-net (наружу НЕ публикуем). Backend обращается на http://ncanode:14579.
+  ncanode:
+    image: malikzh/ncanode:latest
+    container_name: dss-ncanode
+    restart: unless-stopped
+    networks:
+      - dss-net
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:14579/actuator/health | grep -q UP || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 40s
+
+  # ── Backup service (задача 2.10) ─────────────────────────────
+  backup:
+    image: postgres:15-alpine
+    container_name: dss-backup
+    restart: "no"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      PGPASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_HOST: postgres
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      S3_BUCKET: ${S3_BUCKET:-}
+      S3_ENDPOINT: ${S3_ENDPOINT:-}
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-}
+    volumes:
+      - backup_data:/backups
+      - ./scripts/backup.sh:/backup.sh:ro
+    entrypoint: ["/bin/sh", "/backup.sh"]
+    networks:
+      - dss-net
+    profiles:
+      - backup
+
+  # ── Health monitor (НФТ: доступность 99.5% + алерты в Telegram) ──
+  # Периодически проверяет внутренние health-эндпоинты и шлёт алерт в Telegram
+  # при падении/восстановлении. Telegram включается, если заданы TELEGRAM_*.
+  healthmon:
+    image: curlimages/curl:latest
+    container_name: dss-healthmon
+    restart: unless-stopped
+    entrypoint: ["/bin/sh", "/scripts/health_monitor.sh"]
+    environment:
+      HEALTHMON_INTERVAL: ${HEALTHMON_INTERVAL:-60}
+      HEALTHMON_FAILS: ${HEALTHMON_FAILS:-2}
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
+      TELEGRAM_CHAT_ID: ${TELEGRAM_CHAT_ID:-}
+    volumes:
+      - ./scripts:/scripts:ro
+    networks:
+      - dss-net

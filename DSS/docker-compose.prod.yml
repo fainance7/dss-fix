@@ -1,0 +1,144 @@
+# docker-compose.prod.yml — Production overrides
+# Usage: docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+
+version: "3.9"
+
+networks:
+  proxy-net:
+    external: true
+  postgres_default:
+    external: true
+  # Стек мониторинга сервера (/srv/monitoring): backend читает метрики Prometheus.
+  monitoring:
+    external: true
+    name: monitoring_monitoring-net
+
+services:
+  backend:
+    container_name: dss-backend
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.prod
+    volumes:
+      - ./maps:/maps:ro
+      - ./manuals:/app/manuals:ro
+      # Базовые копии БД — только чтение, для статуса в «Настройках» (ФХД.5).
+      - ./basebackups:/basebackups:ro
+    environment:
+      ENVIRONMENT: production
+      DEBUG: "false"
+      PROMETHEUS_URL: http://prometheus:9090
+      INTAKE_TEMPLATE_PATH: /app/manuals/data_intake_template.xlsx
+      INTAKE_PROTOCOL_PATH: /app/manuals/data_intake_protocol.md
+      # Подключение к первичной БД (postgres_db / reports_db) с дампом смежной команды.
+      # Реальные значения хранятся в .env на проде.
+      REPORTS_PGHOST: ${REPORTS_PGHOST:-postgres_db}
+      REPORTS_PGPORT: ${REPORTS_PGPORT:-5432}
+      REPORTS_PGUSER: ${REPORTS_PGUSER:-postgres}
+      REPORTS_PGPASSWORD: ${REPORTS_PGPASSWORD:-}
+      REPORTS_PGDATABASE: ${REPORTS_PGDATABASE:-reports_db}
+      # Подсистема геоданных (смежная команда). Реальный сервис dssgis.dwh.kz.
+      GIS_SERVICE_URL: ${GIS_SERVICE_URL:-https://dssgis.dwh.kz}
+      # AI-микросервис: бэкенд проксирует /api/v1/ai/* на ai-service с серверным
+      # X-AI-Key. AI_SECRET_KEY должен совпадать с тем, что у ai-service.
+      AI_SERVICE_URL: ${AI_SERVICE_URL:-http://dss-ai-service:8001}
+      AI_SECRET_KEY: ${AI_SECRET_KEY:?AI_SECRET_KEY must be set in .env}
+    networks:
+      - dss-net
+      - proxy-net
+      - postgres_default
+      - monitoring
+    # Внутренняя DNS-зона прода (АО НИТ) пока не содержит dssgis.dwh.kz (NXDOMAIN),
+    # хотя сервис доступен через внутренний LB 192.168.7.82 (TLS-сертификат валиден).
+    # Временный маппинг, пока смежники не добавят запись в DNS — тогда убрать.
+    extra_hosts:
+      - "dssgis.dwh.kz:192.168.7.82"
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+
+  frontend:
+    container_name: dss-frontend
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.prod
+      args:
+        NEXT_PUBLIC_API_URL: https://dssapi.dwh.kz/api/v1
+        NEXT_PUBLIC_AI_URL: https://dssai.dwh.kz
+        NEXT_PUBLIC_MARTIN_URL: https://dsstiles.dwh.kz
+    volumes: []
+    environment:
+      NODE_ENV: production
+      HOSTNAME: "0.0.0.0"
+      NEXT_PUBLIC_API_URL: https://dssapi.dwh.kz
+      NEXT_PUBLIC_MARTIN_URL: https://dsstiles.dwh.kz
+      BACKEND_URL: http://dss-backend:8000
+      AI_SERVICE_URL: http://dss-ai-service:8001
+    networks:
+      - dss-net
+      - proxy-net
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+
+  ai-service:
+    container_name: dss-ai-service
+    build:
+      context: ./ai-service
+      dockerfile: Dockerfile.prod
+    volumes: []
+    environment:
+      ENVIRONMENT: production
+      # Должен совпадать с AI_SECRET_KEY бэкенда (он шлёт этот ключ в X-AI-Key).
+      AI_SECRET_KEY: ${AI_SECRET_KEY:?AI_SECRET_KEY must be set in .env}
+    networks:
+      - dss-net
+      - proxy-net
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+
+  # Канал к GPU-узлу (Казтелепорт) — только inference Модуля ИИ: ai-service ходит на
+  # http://gpu-tunnel:8000/v1. Порт наружу не публикуется. Ключ id_gpu_tunnel на
+  # GPU-узле ограничен (restrict, permitopen=127.0.0.1:8000, без shell и без -R):
+  # доступа к базе прода у GPU-узла нет. Откат — deploy/gpu/RUNBOOK.md.
+  gpu-tunnel:
+    build: ./deploy/gpu/tunnel
+    container_name: dss-gpu-tunnel
+    restart: unless-stopped
+    command: >
+      -L 0.0.0.0:8000:127.0.0.1:8000
+      GPU_USER@GPU_HOST
+    volumes:
+      - /home/ruslan/.ssh/id_gpu_tunnel:/root/.ssh/id_gpu:ro
+    networks:
+      - dss-net
+
+  martin:
+    container_name: dss-martin
+    environment:
+      FRONTEND_URL: https://dss.dwh.kz
+    networks:
+      - dss-net
+      - proxy-net
+
+  # TiTiler — только внутренняя сеть (наружу не публикуем), backend проксирует.
+  titiler:
+    container_name: dss-titiler
+    networks:
+      - dss-net
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+
+  # ВНИМАНИЕ: `ports: []` здесь НЕ отменяет публикацию из базового файла —
+  # в Compose v2 списки ports при мерже объединяются, а не заменяются.
+  # Привязку задавать только в docker-compose.yml (там redis и ollama
+  # публикуются на 127.0.0.1). Оставлено для postgres как есть — порт 5433
+  # фактически публикуется базовым файлом, закрывать тем же способом.
+  postgres:
+    ports: []

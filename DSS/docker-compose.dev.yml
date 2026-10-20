@@ -1,0 +1,52 @@
+# docker-compose.dev.yml — Local development overrides
+# Usage: docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d
+
+services:
+  backend:
+    volumes:
+      - ./backend:/app
+      - ./maps:/maps:ro
+
+  frontend:
+    image: node:20-alpine
+    working_dir: /app
+    command: sh -c "npm install --prefer-offline --no-audit --loglevel=error && exec npm run dev"
+    environment:
+      NODE_ENV: development
+      HOSTNAME: 0.0.0.0
+      PORT: 3000
+      NEXT_TELEMETRY_DISABLED: "1"
+    volumes:
+      - ./frontend:/app
+      - frontend_node_modules:/app/node_modules
+
+  ai-service:
+    volumes:
+      - ./ai-service:/app
+
+  # Локальное зеркало прод-БД "postgres_db" (первичные данные смежной команды).
+  # Туда же разворачивается data/report_dump070426.sql.
+  postgres_db_1:
+    image: postgis/postgis:16-3.4
+    container_name: dss-reports-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: reports_db
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: CHANGE_ME
+    ports:
+      - "5434:5432"
+    volumes:
+      - postgres_db_1_data:/var/lib/postgresql/data
+    networks:
+      - dss-net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d reports_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+volumes:
+  postgres_db_1_data:
+  frontend_node_modules:

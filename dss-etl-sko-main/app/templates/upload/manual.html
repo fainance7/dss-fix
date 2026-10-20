@@ -1,0 +1,499 @@
+{% extends "upload/base_upload.html" %}
+
+{% block title %}Ручная загрузка{% endblock %}
+{% block breadcrumb %}Upload / Ручная загрузка{% endblock %}
+{% block page_title %}Ручная загрузка файлов{% endblock %}
+
+{% block content %}
+<div class="grid-2">
+    <div>
+        <div class="card">
+            <div class="card-title"><span>↑</span> Загрузить файл</div>
+            <div class="dropzone" id="dropzone">
+                <input type="file" id="file-input"
+                    accept=".xlsx,.xls,.csv,.doc,.docx,.pdf,.zip,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/zip,application/x-zip-compressed">
+                <div class="dropzone-icon">📂</div>
+                <div class="dropzone-title">Перетащите файл сюда</div>
+                <div class="dropzone-hint">или нажмите для выбора · поддерживается ZIP-архив с несколькими файлами</div>
+                <div class="dropzone-formats">
+                    <span class="format-badge">xlsx</span>
+                    <span class="format-badge">xls</span>
+                    <span class="format-badge">csv</span>
+                    <span class="format-badge">pdf</span>
+                    <span class="format-badge">doc</span>
+                    <span class="format-badge">docx</span>
+                    <span class="format-badge">zip</span>
+                </div>
+                <div class="selected-file" id="selected-file-name" style="display:none"></div>
+                <div class="file-error" id="file-error" style="display:none"></div>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-title"><span>⚙</span> Параметры</div>
+            <div class="form-group">
+                <label class="form-label">Направление данных</label>
+                <select class="form-control" id="direction-select">
+                    <option value="economy">economy — Экономика</option>
+                    <option value="labor">labor — Труд</option>
+                    <option value="social_demog">social_demog — Демография</option>
+                    <option value="climate">climate — Климат</option>
+                    <option value="ecology">ecology — Экология</option>
+                    <option value="tourism">tourism — Туризм</option>
+                    <option value="transport">transport — Транспорт</option>
+                    <option value="water">water — Водные ресурсы</option>
+                    <option value="land">land — Земельные ресурсы</option>
+                    <option value="agriculture">agriculture — Сельское хозяйство</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Куда сохранить</label>
+                <select class="form-control" id="save-mode-select">
+                    <option value="dag">В общую базу (пополнить историю)</option>
+                    <option value="direct">Отдельно — не сохранять в общую базу</option>
+                </select>
+            </div>
+            <div class="form-group" id="zip-substyle-group" style="display:none">
+                <label class="form-label">Как собрать</label>
+                <select class="form-control" id="zip-substyle-select">
+                    <option value="per_file">Каждый файл архива — свой xlsx</option>
+                    <option value="merged">Все файлы архива — один общий xlsx</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Название показателя (опционально)</label>
+                <input type="text" class="form-control" id="indicator-name" placeholder="Например: Численность населения">
+            </div>
+            <button class="btn btn-primary" id="upload-btn" disabled style="width:100%">
+                ↑ Загрузить и проверить
+            </button>
+        </div>
+    </div>
+
+    <div>
+        <div class="status-block" id="status-block">
+            <div class="status-header">
+                <div class="status-dot"></div>
+                <span id="status-title">Обработка...</span>
+            </div>
+            <div class="status-message" id="status-message"></div>
+        </div>
+
+        <div class="card">
+            <div class="card-title"><span>ℹ</span> Что происходит при загрузке</div>
+            <div style="font-size:13px; color:var(--text-secondary); line-height:1.8">
+                1. Файл анализируется — показывается превью первых строк<br>
+                2. После подтверждения данные сохраняются и запускается <code style="color:var(--accent-blue)">dag_extract_historical</code><br>
+                3. DAG формирует Excel для DSS<br>
+                4. Готовый файл появляется в разделе <a href="/upload/files" style="color:var(--accent-blue)">Готовые файлы</a><br>
+                <br>
+                <strong>ZIP-архив:</strong> обрабатывается сразу без превью (каждый поддерживаемый файл внутри архива).
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-title"><span>🔗</span> Источники данных</div>
+            <div style="font-size:12px; color:var(--text-secondary); line-height:2">
+                <a href="https://stat.gov.kz/ru/region/sko/" target="_blank" style="color:var(--accent-blue); text-decoration:none">→ stat.gov.kz/sko</a><br>
+                <a href="https://taldau.stat.gov.kz" target="_blank" style="color:var(--accent-blue); text-decoration:none">→ taldau.stat.gov.kz</a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Модальное окно превью (Задача 1.3) -->
+<div class="modal-overlay" id="preview-modal">
+    <div class="modal">
+        <button class="modal-close" id="preview-close" title="Закрыть">&times;</button>
+        <div class="modal-header">
+            <h2>Превью данных</h2>
+        </div>
+        <div class="modal-summary" id="preview-summary"></div>
+        <div class="modal-body">
+            <table class="preview-table">
+                <thead>
+                    <tr>
+                        <th>Период</th>
+                        <th>Регион</th>
+                        <th>Значение</th>
+                    </tr>
+                </thead>
+                <tbody id="preview-tbody"></tbody>
+            </table>
+        </div>
+        <div class="modal-footer">
+            <button class="btn btn-outline" id="preview-cancel">Отмена</button>
+            <button class="btn btn-primary" id="preview-confirm">Подтвердить и сгенерировать DSS Excel</button>
+        </div>
+        <div class="loading-overlay" id="preview-loader">
+            <div class="spinner spinner-lg"></div>
+            <span id="preview-loader-text">Генерация...</span>
+        </div>
+    </div>
+</div>
+
+<div class="page-loader" id="page-loader">
+    <div class="spinner spinner-lg"></div>
+    <span id="page-loader-text">Анализ файла...</span>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const ALLOWED_EXT = new Set(['xlsx', 'xls', 'csv', 'doc', 'docx', 'pdf', 'zip']);
+
+const dropzone      = document.getElementById('dropzone');
+const fileInput     = document.getElementById('file-input');
+const uploadBtn     = document.getElementById('upload-btn');
+const selectedName  = document.getElementById('selected-file-name');
+const fileError     = document.getElementById('file-error');
+const statusBlock   = document.getElementById('status-block');
+const previewModal  = document.getElementById('preview-modal');
+const previewTbody  = document.getElementById('preview-tbody');
+const previewSummary = document.getElementById('preview-summary');
+const pageLoader    = document.getElementById('page-loader');
+const previewLoader = document.getElementById('preview-loader');
+
+let selectedFile = null;
+let detectData   = null;
+let polling      = null;
+
+const saveModeSelect     = document.getElementById('save-mode-select');
+const zipSubstyleGroup   = document.getElementById('zip-substyle-group');
+const zipSubstyleSelect  = document.getElementById('zip-substyle-select');
+
+function getExt(name) {
+    const i = name.lastIndexOf('.');
+    return i >= 0 ? name.slice(i + 1).toLowerCase() : '';
+}
+
+function isZip(file) { return getExt(file.name) === 'zip'; }
+
+function resolveMode() {
+    if (saveModeSelect.value !== 'direct') return 'dag';
+    if (selectedFile && isZip(selectedFile) && zipSubstyleSelect.value === 'merged') return 'direct_merged';
+    return 'direct';
+}
+
+function updateSubstyleVisibility() {
+    const showSubstyle = !!(selectedFile && isZip(selectedFile) && saveModeSelect.value === 'direct');
+    zipSubstyleGroup.style.display = showSubstyle ? 'block' : 'none';
+}
+
+async function downloadResponseAsFile(resp, fallbackName) {
+    const blob = await resp.blob();
+    const cd = resp.headers.get('Content-Disposition') || '';
+    const match = cd.match(/filename="?([^"]+)"?/);
+    const filename = match ? match[1] : fallbackName;
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+}
+
+function validateFile(file) {
+    const ext = getExt(file.name);
+    if (!ALLOWED_EXT.has(ext)) {
+        return `Недопустимый формат «.${ext}». Поддерживаемые: ${[...ALLOWED_EXT].join(', ')}`;
+    }
+    return null;
+}
+
+dropzone.addEventListener('dragover',  e => { e.preventDefault(); dropzone.classList.add('drag-over'); });
+dropzone.addEventListener('dragleave', () => dropzone.classList.remove('drag-over'));
+dropzone.addEventListener('drop', e => {
+    e.preventDefault();
+    dropzone.classList.remove('drag-over');
+    if (e.dataTransfer.files.length) setFile(e.dataTransfer.files[0]);
+});
+fileInput.addEventListener('change', () => { if (fileInput.files.length) setFile(fileInput.files[0]); });
+saveModeSelect.addEventListener('change', updateSubstyleVisibility);
+
+function setFile(file) {
+    const err = validateFile(file);
+    fileError.style.display = err ? 'block' : 'none';
+    fileError.textContent = err || '';
+    if (err) {
+        selectedFile = null;
+        selectedName.style.display = 'none';
+        uploadBtn.disabled = true;
+        updateSubstyleVisibility();
+        return;
+    }
+    selectedFile = file;
+    selectedName.textContent = `✓ ${file.name} (${(file.size / 1024).toFixed(1)} KB)`;
+    selectedName.style.display = 'block';
+    uploadBtn.disabled = false;
+    uploadBtn.textContent = isZip(file) ? '↑ Загрузить ZIP-архив' : '↑ Загрузить и проверить';
+    updateSubstyleVisibility();
+}
+
+async function parseApiError(resp) {
+    try {
+        const data = await resp.json();
+        if (typeof data.detail === 'string') return data.detail;
+        if (Array.isArray(data.detail)) return data.detail.map(d => d.msg || JSON.stringify(d)).join('; ');
+        return data.message || JSON.stringify(data);
+    } catch {
+        return `HTTP ${resp.status}`;
+    }
+}
+
+function showPageLoader(text) {
+    document.getElementById('page-loader-text').textContent = text;
+    pageLoader.classList.add('visible');
+}
+function hidePageLoader() { pageLoader.classList.remove('visible'); }
+
+function showPreviewLoader(text) {
+    document.getElementById('preview-loader-text').textContent = text;
+    previewLoader.classList.add('visible');
+}
+function hidePreviewLoader() { previewLoader.classList.remove('visible'); }
+
+function buildPreviewRows(data) {
+    const rows = [];
+    for (const sheet of data.sheets || []) {
+        for (const block of sheet.blocks || []) {
+            const years = (block.years || []);
+            const periodLabel = years.length ? years.join(', ') : (block.period_type || 'year');
+
+            if (block.preview && block.preview.length) {
+                for (const p of block.preview) {
+                    rows.push({
+                        period: periodLabel,
+                        region: p.region || '—',
+                        value: p.sample_value != null && p.sample_value !== ''
+                            ? String(p.sample_value)
+                            : '—',
+                        katoError: !!p.kato_error,
+                        katoCode: p.kato_code || null,
+                    });
+                }
+            } else {
+                rows.push({ period: periodLabel, region: '—', value: '—' });
+            }
+        }
+    }
+    return rows;
+}
+
+function openPreviewModal(data) {
+    detectData = data;
+    const rows = buildPreviewRows(data);
+    previewSummary.innerHTML =
+        `Файл: <strong>${data.filename || selectedFile.name}</strong> · ` +
+        `Листов: ${data.total_sheets ?? '—'} · Блоков: ${data.total_blocks ?? '—'} · ` +
+        `Будет сохранено строк: <strong>${data.total_rows_will_be_saved ?? '—'}</strong>` +
+        (data.total_unmatched ? ` · <span style="color:var(--accent-amber)">Несопоставленных: ${data.total_unmatched}</span>` : '');
+
+    if (!rows.length) {
+        previewTbody.innerHTML = '<tr><td colspan="3" style="text-align:center;color:var(--text-muted);padding:20px">Данные для превью не найдены</td></tr>';
+    } else {
+        previewTbody.innerHTML = rows.map(r => `
+            <tr${r.katoError ? ' style="background:rgba(220,50,50,0.12)"' : ''}>
+                <td>${escapeHtml(r.period)}</td>
+                <td>${escapeHtml(r.region)}${r.katoError ? ' <span title="Регион не распознан в справочнике КАТО" style="color:#d33">&#9888;</span>' : (r.katoCode ? ` <span style="color:var(--text-muted);font-size:0.85em">(${r.katoCode})</span>` : '')}</td>
+                <td>${escapeHtml(String(r.value))}</td>
+            </tr>
+        `).join('');
+    }
+    // Задача 1.2: блокируем «Подтвердить», если есть нераспознанные регионы (kato_error).
+    // Кнопка активируется только когда все регионы сопоставлены с КАТО.
+    const confirmBtn = document.getElementById('preview-confirm');
+    const hasKatoError = rows.some(r => r.katoError);
+    // валидная строка = регион распознан (не пустой, не '—', без kato_error) И значение не пустое
+    const validRows = rows.filter(r => r.region && r.region !== '—' && !r.katoError && r.value !== '—' && r.value !== '');
+    const noValidData = validRows.length === 0;
+    // Блокируем ТОЛЬКО когда валидных строк нет вообще (файл не распознан).
+    // Частичные ошибки не блокируют: строки с нераспознанным регионом всё равно
+    // не попадают в базу (отсеиваются при парсинге). Блокировать весь файл
+    // из-за нескольких битых строк значило бы терять сотни хороших.
+    if (noValidData) {
+        confirmBtn.disabled = true;
+        confirmBtn.title = 'Файл не распознан — нет ни одной строки с регионом и значением.';
+        confirmBtn.style.opacity = '0.5';
+        confirmBtn.style.cursor = 'not-allowed';
+        previewSummary.innerHTML += ' \u00b7 <span style="color:#d33">\u26a0 Файл не распознан (пустые регионы/значения) — генерация заблокирована</span>';
+    } else if (hasKatoError) {
+        confirmBtn.disabled = false;
+        confirmBtn.title = 'Строки с нераспознанным регионом будут пропущены — загрузятся только корректные.';
+        confirmBtn.style.opacity = '';
+        confirmBtn.style.cursor = '';
+        var _bad = rows.filter(function(r){ return r.katoError || r.region === '\u2014' || r.value === '\u2014'; }).length;
+        previewSummary.innerHTML += ' \u00b7 <span style="color:var(--accent-amber)">\u26a0 Нераспознанных строк: ' + _bad + ' — будут пропущены, остальные загрузятся</span>';
+    } else {
+        confirmBtn.disabled = false;
+        confirmBtn.title = '';
+        confirmBtn.style.opacity = '';
+        confirmBtn.style.cursor = '';
+    }
+    previewModal.classList.add('visible');
+}
+
+function closePreviewModal() {
+    previewModal.classList.remove('visible');
+    hidePreviewLoader();
+}
+
+function escapeHtml(s) {
+    return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+uploadBtn.addEventListener('click', async () => {
+    if (!selectedFile) return;
+    uploadBtn.disabled = true;
+    if (isZip(selectedFile)) {
+        await uploadZip();
+    } else {
+        await fetchDetect();
+    }
+    uploadBtn.disabled = false;
+});
+
+async function fetchDetect() {
+    showPageLoader('Анализ файла и построение превью...');
+    showStatus('running', 'Анализирую структуру файла...');
+
+    const fd = new FormData();
+    fd.append('file', selectedFile);
+
+    try {
+        const resp = await fetch('/upload/api/detect', { method: 'POST', body: fd });
+        hidePageLoader();
+        if (!resp.ok) {
+            showStatus('error', await parseApiError(resp));
+            return;
+        }
+        const data = await resp.json();
+        showStatus('success', 'Превью готово — проверьте данные и подтвердите генерацию.');
+        openPreviewModal(data);
+    } catch (e) {
+        hidePageLoader();
+        showStatus('error', 'Сетевая ошибка: ' + e.message);
+    }
+}
+
+async function uploadZip() {
+    const mode = resolveMode();
+    showPageLoader(mode === 'dag' ? 'Загрузка и обработка ZIP-архива...' : 'Обработка ZIP-архива (без сохранения в базу)...');
+    showStatus('running', 'Отправляю ZIP-архив на обработку...');
+
+    const fd = new FormData();
+    fd.append('file', selectedFile);
+    fd.append('direction', document.getElementById('direction-select').value);
+    fd.append('mode', mode);
+
+    try {
+        const resp = await fetch('/upload/api/zip', { method: 'POST', body: fd });
+        hidePageLoader();
+        if (!resp.ok) {
+            showStatus('error', await parseApiError(resp));
+            return;
+        }
+
+        if (mode === 'direct' || mode === 'direct_merged') {
+            await downloadResponseAsFile(resp, mode === 'direct_merged' ? 'dss_batch_merged.xlsx' : 'dss_batch.zip');
+            const succ = resp.headers.get('X-Files-Succeeded');
+            const fail = resp.headers.get('X-Files-Failed');
+            showStatus('success', `Готово, файл скачан (в базу не сохранено). Успешно: ${succ ?? '—'}, с ошибками: ${fail ?? '0'}.`);
+            return;
+        }
+
+        const data = await resp.json();
+        const msg = data.message || `Обработано ${data.files_succeeded}/${data.files_total} файлов, ${data.rows_saved} строк сохранено.`;
+        if (data.failed && data.failed.length) {
+            showStatus('error', msg + ' Ошибки: ' + data.failed.map(f => f.file).join(', '));
+        } else {
+            showStatus('success', msg);
+        }
+        if (data.dag_run_id) {
+            pollDag('dag_extract_historical', data.dag_run_id,
+                'Готово! Архив обработан. Файл появится в <a href="/upload/files" style="color:var(--accent-blue)">Готовые файлы</a>.');
+        }
+    } catch (e) {
+        hidePageLoader();
+        showStatus('error', 'Сетевая ошибка: ' + e.message);
+    }
+}
+
+document.getElementById('preview-cancel').addEventListener('click', closePreviewModal);
+document.getElementById('preview-close').addEventListener('click', closePreviewModal);
+previewModal.addEventListener('click', e => { if (e.target === previewModal) closePreviewModal(); });
+
+document.getElementById('preview-confirm').addEventListener('click', async () => {
+    if (!selectedFile) return;
+    const mode = resolveMode();
+    showPreviewLoader(mode === 'dag' ? 'Генерация и запуск DAG...' : 'Генерация отдельного файла...');
+
+    const fd = new FormData();
+    fd.append('file', selectedFile);
+    fd.append('direction', document.getElementById('direction-select').value);
+    fd.append('indicator_name', document.getElementById('indicator-name').value);
+    fd.append('mode', mode);
+
+    try {
+        const resp = await fetch('/upload/api/file', { method: 'POST', body: fd });
+        hidePreviewLoader();
+        if (!resp.ok) {
+            showStatus('error', await parseApiError(resp));
+            return;
+        }
+
+        if (mode === 'direct') {
+            closePreviewModal();
+            await downloadResponseAsFile(resp, 'dss_file.xlsx');
+            showStatus('success', 'Готово, файл скачан (в общую базу не сохранён).');
+            return;
+        }
+
+        const data = await resp.json();
+        closePreviewModal();
+        showStatus('running', data.message || 'Данные сохранены, DAG запущен...');
+        if (data.dag_run_id) {
+            pollDag('dag_extract_historical', data.dag_run_id,
+                'Готово! DSS Excel сформирован. Скачайте в разделе <a href="/upload/files" style="color:var(--accent-blue)">Готовые файлы</a>.');
+        } else {
+            showStatus('success', data.message || 'Данные сохранены.');
+        }
+    } catch (e) {
+        hidePreviewLoader();
+        showStatus('error', 'Сетевая ошибка: ' + e.message);
+    }
+});
+
+function pollDag(dagId, dagRunId, successHtml) {
+    if (polling) clearInterval(polling);
+    polling = setInterval(async () => {
+        try {
+            const resp = await fetch(`/upload/api/dag-status/${dagId}/${encodeURIComponent(dagRunId)}`);
+            const data = await resp.json();
+            const state = data.state || 'unknown';
+            const msgs = {
+                running: 'DAG выполняется...',
+                success: successHtml || 'Готово! DAG завершён успешно.',
+                failed:  'Ошибка при выполнении DAG.',
+                queued:  'В очереди...',
+                unknown: 'Неизвестный статус'
+            };
+            const msg = msgs[state] || state;
+            showStatus(state === 'failed' ? 'error' : state, msg, state === 'success');
+            if (['success', 'failed'].includes(state)) clearInterval(polling);
+        } catch (e) {}
+    }, 3000);
+}
+
+function showStatus(status, message, isHtml) {
+    statusBlock.className = `status-block visible ${status}`;
+    const titles = { running: 'Выполняется...', success: 'Готово!', error: 'Ошибка', queued: 'В очереди' };
+    document.getElementById('status-title').textContent = titles[status] || status;
+    const el = document.getElementById('status-message');
+    if (isHtml) el.innerHTML = message;
+    else el.textContent = message;
+}
+</script>
+{% endblock %}

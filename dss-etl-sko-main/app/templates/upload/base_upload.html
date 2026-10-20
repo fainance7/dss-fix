@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}ETL Upload{% endblock %} — aldispetro.kz</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=Golos+Text:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/static/css/upload.css">
+    {% block extra_head %}{% endblock %}
+</head>
+<body>
+    <nav class="sidebar">
+        <div class="sidebar-logo">
+            <span class="logo-icon">⬡</span>
+            <span class="logo-text">ETL<br><small>aldispetro.kz</small></span>
+        </div>
+        <ul class="sidebar-nav">
+            <li>
+                <a href="/upload/" class="nav-item {% if request.url.path == '/upload/' %}active{% endif %}">
+                    <span class="nav-icon">◈</span>
+                    <span>Обзор</span>
+                </a>
+            </li>
+            <li>
+                <a href="/upload/manual" class="nav-item {% if request.url.path == '/upload/manual' %}active{% endif %}">
+                    <span class="nav-icon">↑</span>
+                    <span>Ручная загрузка</span>
+                </a>
+            </li>
+            <li>
+                <a href="/upload/taldau" class="nav-item {% if request.url.path == '/upload/taldau' %}active{% endif %}">
+                    <span class="nav-icon">⊞</span>
+                    <span>Taldau + Гос. API</span>
+                </a>
+            </li>
+            <li>
+                <a href="/upload/climate" class="nav-item {% if request.url.path == '/upload/climate' %}active{% endif %}">
+                    <span class="nav-icon">◎</span>
+                    <span>Климат API</span>
+                </a>
+            </li>
+            <li>
+                <a href="/upload/files" class="nav-item {% if request.url.path == '/upload/files' %}active{% endif %}">
+                    <span class="nav-icon">📦</span>
+                    <span>Готовые файлы</span>
+                </a>
+            </li>
+	    <li>
+                <a href="/upload/agromap" class="nav-item {% if request.url.path == '/upload/agromap' %}active{% endif %}">
+                    <span class="nav-icon">🗺</span>
+                    <span>Земельные ресурсы (СКО)</span>
+                </a>
+            </li>
+            <li>
+                <a href="/upload/legal" class="nav-item {% if request.url.path == '/upload/legal' %}active{% endif %}">
+                    <span class="nav-icon">🏢</span>
+                    <span>База юрлиц</span>
+                </a>
+            </li>
+        </ul>
+        <div class="sidebar-footer">
+            <a href="https://dss.dwh.kz" target="_blank" class="dss-link">→ DSS Дашборд</a><br>
+            <a href="http://89.207.253.64:8080" target="_blank" class="dss-link">→ Airflow UI</a>
+        </div>
+    </nav>
+
+    <main class="main-content">
+        <header class="page-header">
+            <div class="header-breadcrumb">
+                ETL / {% block breadcrumb %}Обзор{% endblock %}
+            </div>
+            <h1 class="page-title">{% block page_title %}{% endblock %}</h1>
+        </header>
+        <div class="content-area">
+            {% block content %}{% endblock %}
+        </div>
+    </main>
+
+    <script src="/static/js/upload.js"></script>
+    {% block scripts %}{% endblock %}
+</body>
+</html>

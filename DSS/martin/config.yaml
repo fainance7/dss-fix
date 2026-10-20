@@ -1,0 +1,57 @@
+# Martin tile-server configuration
+# Docs: https://maplibre.org/martin/
+
+listen_addresses: "0.0.0.0:3001"
+
+# PostgreSQL connection
+postgres:
+  connection_string: "${DATABASE_URL}"
+  # Max connections in pool
+  pool_size: 5
+  # Auto-discover tables with geometry columns
+  auto_publish:
+    tables:
+      # Publish spatial_data as vector tile source
+      spatial_data:
+        schema: public
+        table: spatial_data
+        id_column: id
+        geometry_column: geom
+        srid: 4326
+        geometry_type: GEOMETRY
+        # Min/Max zoom for tile generation
+        minzoom: 0
+        maxzoom: 18
+        # Include these properties in tiles
+        properties:
+          - layer_id
+          - region_id
+          - data_date
+          - validation_status
+          - properties
+
+      # Publish regions boundaries
+      regions:
+        schema: public
+        table: regions
+        id_column: id
+        geometry_column: geom
+        srid: 4326
+        geometry_type: MULTIPOLYGON
+        minzoom: 4
+        maxzoom: 14
+        properties:
+          - code
+          - name
+          - level
+          - parent_id
+
+# Tile cache settings (optional Redis)
+# cache:
+#   connection_string: "${REDIS_URL}"
+
+# CORS
+cors:
+  allowed_origins:
+    - "http://localhost:3000"
+    - "${FRONTEND_URL}"

@@ -1,0 +1,553 @@
+{
+ "version": "2026-10-01",
+ "source": "Наложение растров вариантов ЛП (результаты 11.09.2026, полное разрешение) на маски категорий земель смежной команды (партия 2026-10-02_lp): сельхозугодья 2025, вода, населённые пункты, дороги, лес, ООПТ. docs/Наложение_ЛП_на_маски_категорий_земель_2026-10-01.md",
+ "rule": "[Э] Поля в классе «регулируемое» выбывают из пашни, поля в классе «пастбищное» переходят в пастбища; прочие земли вне масок в классах «пашня» и «орошение» распахиваются из пастбищ. Вода, населённые пункты, дороги, лес и ООПТ не меняются; незонированные земли — без изменений. Значения — потенциал при полной реализации зонирования, а не план. Урожайность на распаханных землях принята средней по области, что завышает эффект: это пастбища, залежи и солончаки, их пригодность ниже — учитывается параметром «сдвиг класса пригодности».",
+ "variants": {
+  "lp-v1-conservative": {
+   "arable": 82.7,
+   "pasture": -300.6,
+   "components": {
+    "fields_to_regulated": 217.9,
+    "fields_to_pasture": 263.4,
+    "other_to_arable": 487.5,
+    "other_to_irrigated": 76.5,
+    "fields_unzoned": 721.2,
+    "other_unzoned": 808.6
+   },
+   "districts": {
+    "Петропавловск Г.А.": {
+     "arable": 0.0,
+     "pasture": -0.0,
+     "components": {
+      "fields_to_regulated": 0.0,
+      "fields_to_pasture": 0.0,
+      "other_to_arable": 0.0,
+      "other_to_irrigated": 0.0,
+      "fields_unzoned": 0.1,
+      "other_unzoned": 4.9
+     }
+    },
+    "Айыртауский район": {
+     "arable": -2.4,
+     "pasture": -4.2,
+     "components": {
+      "fields_to_regulated": 6.6,
+      "fields_to_pasture": 0.3,
+      "other_to_arable": 2.5,
+      "other_to_irrigated": 2.0,
+      "fields_unzoned": 29.6,
+      "other_unzoned": 19.6
+     }
+    },
+    "Акжарский район": {
+     "arable": 53.8,
+     "pasture": -60.3,
+     "components": {
+      "fields_to_regulated": 6.5,
+      "fields_to_pasture": 22.2,
+      "other_to_arable": 72.4,
+      "other_to_irrigated": 10.1,
+      "fields_unzoned": 127.2,
+      "other_unzoned": 79.7
+     }
+    },
+    "Аккайынский район": {
+     "arable": -10.8,
+     "pasture": 1.7,
+     "components": {
+      "fields_to_regulated": 9.0,
+      "fields_to_pasture": 3.7,
+      "other_to_arable": 1.6,
+      "other_to_irrigated": 0.4,
+      "fields_unzoned": 21.3,
+      "other_unzoned": 31.4
+     }
+    },
+    "Есильский район": {
+     "arable": -12.8,
+     "pasture": -0.1,
+     "components": {
+      "fields_to_regulated": 12.9,
+      "fields_to_pasture": 1.7,
+      "other_to_arable": 1.6,
+      "other_to_irrigated": 0.3,
+      "fields_unzoned": 35.4,
+      "other_unzoned": 36.9
+     }
+    },
+    "Жамбылский район": {
+     "arable": -38.7,
+     "pasture": -3.1,
+     "components": {
+      "fields_to_regulated": 41.8,
+      "fields_to_pasture": 0.8,
+      "other_to_arable": 2.6,
+      "other_to_irrigated": 1.3,
+      "fields_unzoned": 49.5,
+      "other_unzoned": 74.2
+     }
+    },
+    "Кызылжарский район": {
+     "arable": -26.6,
+     "pasture": 1.1,
+     "components": {
+      "fields_to_regulated": 25.6,
+      "fields_to_pasture": 2.1,
+      "other_to_arable": 0.9,
+      "other_to_irrigated": 0.1,
+      "fields_unzoned": 25.8,
+      "other_unzoned": 55.1
+     }
+    },
+    "Мамлютский район": {
+     "arable": -26.4,
+     "pasture": -1.0,
+     "components": {
+      "fields_to_regulated": 27.4,
+      "fields_to_pasture": 0.2,
+      "other_to_arable": 1.0,
+      "other_to_irrigated": 0.2,
+      "fields_unzoned": 14.5,
+      "other_unzoned": 37.9
+     }
+    },
+    "Тайыншинский район": {
+     "arable": -8.5,
+     "pasture": -2.6,
+     "components": {
+      "fields_to_regulated": 11.1,
+      "fields_to_pasture": 53.4,
+      "other_to_arable": 48.7,
+      "other_to_irrigated": 7.4,
+      "fields_unzoned": 134.2,
+      "other_unzoned": 88.3
+     }
+    },
+    "Тимирязевский район": {
+     "arable": -10.2,
+     "pasture": 3.2,
+     "components": {
+      "fields_to_regulated": 7.0,
+      "fields_to_pasture": 7.6,
+      "other_to_arable": 3.9,
+      "other_to_irrigated": 0.5,
+      "fields_unzoned": 32.8,
+      "other_unzoned": 19.8
+     }
+    },
+    "Уалихановский район": {
+     "arable": 249.6,
+     "pasture": -266.1,
+     "components": {
+      "fields_to_regulated": 16.5,
+      "fields_to_pasture": 92.3,
+      "other_to_arable": 332.7,
+      "other_to_irrigated": 25.6,
+      "fields_unzoned": 112.7,
+      "other_unzoned": 163.7
+     }
+    },
+    "Район Магжана Жумабаева": {
+     "arable": -26.9,
+     "pasture": 6.8,
+     "components": {
+      "fields_to_regulated": 20.1,
+      "fields_to_pasture": 9.7,
+      "other_to_arable": 2.6,
+      "other_to_irrigated": 0.2,
+      "fields_unzoned": 40.9,
+      "other_unzoned": 80.5
+     }
+    },
+    "Район Шал акына": {
+     "arable": -12.0,
+     "pasture": -4.2,
+     "components": {
+      "fields_to_regulated": 16.2,
+      "fields_to_pasture": 0.6,
+      "other_to_arable": 2.8,
+      "other_to_irrigated": 2.0,
+      "fields_unzoned": 30.1,
+      "other_unzoned": 27.8
+     }
+    },
+    "Район им. Габита Мусрепова": {
+     "arable": -45.4,
+     "pasture": 28.1,
+     "components": {
+      "fields_to_regulated": 17.3,
+      "fields_to_pasture": 68.7,
+      "other_to_arable": 14.2,
+      "other_to_irrigated": 26.4,
+      "fields_unzoned": 67.0,
+      "other_unzoned": 88.9
+     }
+    }
+   }
+  },
+  "lp-v2-balanced": {
+   "arable": 1106.2,
+   "pasture": -1136.0,
+   "components": {
+    "fields_to_regulated": 29.7,
+    "fields_to_pasture": 280.2,
+    "other_to_arable": 1232.2,
+    "other_to_irrigated": 184.0,
+    "fields_unzoned": 721.2,
+    "other_unzoned": 808.6
+   },
+   "districts": {
+    "Петропавловск Г.А.": {
+     "arable": 1.5,
+     "pasture": -1.5,
+     "components": {
+      "fields_to_regulated": 0.0,
+      "fields_to_pasture": 0.0,
+      "other_to_arable": 1.3,
+      "other_to_irrigated": 0.2,
+      "fields_unzoned": 0.1,
+      "other_unzoned": 4.9
+     }
+    },
+    "Айыртауский район": {
+     "arable": 42.9,
+     "pasture": -44.5,
+     "components": {
+      "fields_to_regulated": 1.6,
+      "fields_to_pasture": 1.1,
+      "other_to_arable": 35.2,
+      "other_to_irrigated": 10.4,
+      "fields_unzoned": 29.6,
+      "other_unzoned": 19.6
+     }
+    },
+    "Акжарский район": {
+     "arable": 79.8,
+     "pasture": -81.2,
+     "components": {
+      "fields_to_regulated": 1.5,
+      "fields_to_pasture": 22.7,
+      "other_to_arable": 93.5,
+      "other_to_irrigated": 10.5,
+      "fields_unzoned": 127.2,
+      "other_unzoned": 79.7
+     }
+    },
+    "Аккайынский район": {
+     "arable": 52.3,
+     "pasture": -53.4,
+     "components": {
+      "fields_to_regulated": 1.1,
+      "fields_to_pasture": 4.2,
+      "other_to_arable": 54.4,
+      "other_to_irrigated": 3.2,
+      "fields_unzoned": 21.3,
+      "other_unzoned": 31.4
+     }
+    },
+    "Есильский район": {
+     "arable": 57.7,
+     "pasture": -58.8,
+     "components": {
+      "fields_to_regulated": 1.1,
+      "fields_to_pasture": 2.1,
+      "other_to_arable": 55.5,
+      "other_to_irrigated": 5.3,
+      "fields_unzoned": 35.4,
+      "other_unzoned": 36.9
+     }
+    },
+    "Жамбылский район": {
+     "arable": 145.4,
+     "pasture": -148.8,
+     "components": {
+      "fields_to_regulated": 3.5,
+      "fields_to_pasture": 1.3,
+      "other_to_arable": 119.7,
+      "other_to_irrigated": 30.5,
+      "fields_unzoned": 49.5,
+      "other_unzoned": 74.2
+     }
+    },
+    "Кызылжарский район": {
+     "arable": 54.3,
+     "pasture": -58.3,
+     "components": {
+      "fields_to_regulated": 4.0,
+      "fields_to_pasture": 2.6,
+      "other_to_arable": 56.1,
+      "other_to_irrigated": 4.8,
+      "fields_unzoned": 25.8,
+      "other_unzoned": 55.1
+     }
+    },
+    "Мамлютский район": {
+     "arable": 43.8,
+     "pasture": -46.3,
+     "components": {
+      "fields_to_regulated": 2.6,
+      "fields_to_pasture": 0.3,
+      "other_to_arable": 44.8,
+      "other_to_irrigated": 1.8,
+      "fields_unzoned": 14.5,
+      "other_unzoned": 37.9
+     }
+    },
+    "Тайыншинский район": {
+     "arable": 80.7,
+     "pasture": -82.7,
+     "components": {
+      "fields_to_regulated": 1.9,
+      "fields_to_pasture": 54.7,
+      "other_to_arable": 127.8,
+      "other_to_irrigated": 9.5,
+      "fields_unzoned": 134.2,
+      "other_unzoned": 88.3
+     }
+    },
+    "Тимирязевский район": {
+     "arable": 54.1,
+     "pasture": -54.9,
+     "components": {
+      "fields_to_regulated": 0.9,
+      "fields_to_pasture": 8.1,
+      "other_to_arable": 60.0,
+      "other_to_irrigated": 3.1,
+      "fields_unzoned": 32.8,
+      "other_unzoned": 19.8
+     }
+    },
+    "Уалихановский район": {
+     "arable": 257.4,
+     "pasture": -263.0,
+     "components": {
+      "fields_to_regulated": 5.6,
+      "fields_to_pasture": 102.1,
+      "other_to_arable": 336.9,
+      "other_to_irrigated": 28.1,
+      "fields_unzoned": 112.7,
+      "other_unzoned": 163.7
+     }
+    },
+    "Район Магжана Жумабаева": {
+     "arable": 94.8,
+     "pasture": -98.0,
+     "components": {
+      "fields_to_regulated": 3.2,
+      "fields_to_pasture": 11.4,
+      "other_to_arable": 107.3,
+      "other_to_irrigated": 2.1,
+      "fields_unzoned": 40.9,
+      "other_unzoned": 80.5
+     }
+    },
+    "Район Шал акына": {
+     "arable": 88.4,
+     "pasture": -89.5,
+     "components": {
+      "fields_to_regulated": 1.1,
+      "fields_to_pasture": 0.7,
+      "other_to_arable": 74.3,
+      "other_to_irrigated": 15.9,
+      "fields_unzoned": 30.1,
+      "other_unzoned": 27.8
+     }
+    },
+    "Район им. Габита Мусрепова": {
+     "arable": 53.2,
+     "pasture": -55.1,
+     "components": {
+      "fields_to_regulated": 1.9,
+      "fields_to_pasture": 69.0,
+      "other_to_arable": 65.4,
+      "other_to_irrigated": 58.7,
+      "fields_unzoned": 67.0,
+      "other_unzoned": 88.9
+     }
+    }
+   }
+  },
+  "lp-v3-development": {
+   "arable": 1424.0,
+   "pasture": -1436.0,
+   "components": {
+    "fields_to_regulated": 11.9,
+    "fields_to_pasture": 280.3,
+    "other_to_arable": 1445.8,
+    "other_to_irrigated": 270.5,
+    "fields_unzoned": 721.2,
+    "other_unzoned": 808.6
+   },
+   "districts": {
+    "Петропавловск Г.А.": {
+     "arable": 1.5,
+     "pasture": -1.5,
+     "components": {
+      "fields_to_regulated": 0.0,
+      "fields_to_pasture": 0.0,
+      "other_to_arable": 1.3,
+      "other_to_irrigated": 0.2,
+      "fields_unzoned": 0.1,
+      "other_unzoned": 4.9
+     }
+    },
+    "Айыртауский район": {
+     "arable": 59.7,
+     "pasture": -60.3,
+     "components": {
+      "fields_to_regulated": 0.6,
+      "fields_to_pasture": 1.1,
+      "other_to_arable": 43.8,
+      "other_to_irrigated": 17.7,
+      "fields_unzoned": 29.6,
+      "other_unzoned": 19.6
+     }
+    },
+    "Акжарский район": {
+     "arable": 134.4,
+     "pasture": -134.4,
+     "components": {
+      "fields_to_regulated": 0.0,
+      "fields_to_pasture": 22.7,
+      "other_to_arable": 131.0,
+      "other_to_irrigated": 26.0,
+      "fields_unzoned": 127.2,
+      "other_unzoned": 79.7
+     }
+    },
+    "Аккайынский район": {
+     "arable": 57.9,
+     "pasture": -58.4,
+     "components": {
+      "fields_to_regulated": 0.5,
+      "fields_to_pasture": 4.2,
+      "other_to_arable": 56.6,
+      "other_to_irrigated": 6.0,
+      "fields_unzoned": 21.3,
+      "other_unzoned": 31.4
+     }
+    },
+    "Есильский район": {
+     "arable": 62.4,
+     "pasture": -62.9,
+     "components": {
+      "fields_to_regulated": 0.5,
+      "fields_to_pasture": 2.1,
+      "other_to_arable": 58.3,
+      "other_to_irrigated": 6.7,
+      "fields_unzoned": 35.4,
+      "other_unzoned": 36.9
+     }
+    },
+    "Жамбылский район": {
+     "arable": 152.7,
+     "pasture": -155.3,
+     "components": {
+      "fields_to_regulated": 2.7,
+      "fields_to_pasture": 1.3,
+      "other_to_arable": 122.6,
+      "other_to_irrigated": 34.0,
+      "fields_unzoned": 49.5,
+      "other_unzoned": 74.2
+     }
+    },
+    "Кызылжарский район": {
+     "arable": 56.9,
+     "pasture": -60.0,
+     "components": {
+      "fields_to_regulated": 3.1,
+      "fields_to_pasture": 2.6,
+      "other_to_arable": 56.8,
+      "other_to_irrigated": 5.9,
+      "fields_unzoned": 25.8,
+      "other_unzoned": 55.1
+     }
+    },
+    "Мамлютский район": {
+     "arable": 50.7,
+     "pasture": -52.6,
+     "components": {
+      "fields_to_regulated": 1.9,
+      "fields_to_pasture": 0.3,
+      "other_to_arable": 49.3,
+      "other_to_irrigated": 3.6,
+      "fields_unzoned": 14.5,
+      "other_unzoned": 37.9
+     }
+    },
+    "Тайыншинский район": {
+     "arable": 129.1,
+     "pasture": -129.3,
+     "components": {
+      "fields_to_regulated": 0.2,
+      "fields_to_pasture": 54.7,
+      "other_to_arable": 157.0,
+      "other_to_irrigated": 27.1,
+      "fields_unzoned": 134.2,
+      "other_unzoned": 88.3
+     }
+    },
+    "Тимирязевский район": {
+     "arable": 56.8,
+     "pasture": -57.2,
+     "components": {
+      "fields_to_regulated": 0.4,
+      "fields_to_pasture": 8.1,
+      "other_to_arable": 61.4,
+      "other_to_irrigated": 3.8,
+      "fields_unzoned": 32.8,
+      "other_unzoned": 19.8
+     }
+    },
+    "Уалихановский район": {
+     "arable": 387.3,
+     "pasture": -387.5,
+     "components": {
+      "fields_to_regulated": 0.2,
+      "fields_to_pasture": 102.1,
+      "other_to_arable": 445.5,
+      "other_to_irrigated": 44.1,
+      "fields_unzoned": 112.7,
+      "other_unzoned": 163.7
+     }
+    },
+    "Район Магжана Жумабаева": {
+     "arable": 106.3,
+     "pasture": -107.1,
+     "components": {
+      "fields_to_regulated": 0.7,
+      "fields_to_pasture": 11.4,
+      "other_to_arable": 114.1,
+      "other_to_irrigated": 4.3,
+      "fields_unzoned": 40.9,
+      "other_unzoned": 80.5
+     }
+    },
+    "Район Шал акына": {
+     "arable": 93.6,
+     "pasture": -94.3,
+     "components": {
+      "fields_to_regulated": 0.7,
+      "fields_to_pasture": 0.7,
+      "other_to_arable": 77.4,
+      "other_to_irrigated": 17.6,
+      "fields_unzoned": 30.1,
+      "other_unzoned": 27.8
+     }
+    },
+    "Район им. Габита Мусрепова": {
+     "arable": 74.8,
+     "pasture": -75.2,
+     "components": {
+      "fields_to_regulated": 0.4,
+      "fields_to_pasture": 69.0,
+      "other_to_arable": 70.7,
+      "other_to_irrigated": 73.5,
+      "fields_unzoned": 67.0,
+      "other_unzoned": 88.9
+     }
+    }
+   }
+  }
+ }
+}

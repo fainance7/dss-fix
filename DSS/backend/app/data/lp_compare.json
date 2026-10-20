@@ -1,0 +1,636 @@
+{
+ "built_at": "2026-10-05",
+ "unit": "тыс. га",
+ "variants": {
+  "V1": {
+   "group": "lp-v1-conservative",
+   "label": "V1 — природоохранный",
+   "dataset_id": "444297ba-0a08-401e-ade8-d7c170f7aaca"
+  },
+  "V2": {
+   "group": "lp-v2-balanced",
+   "label": "V2 — сбалансированный",
+   "dataset_id": "19817b4a-f1b4-4b95-85b1-88f05ed570d5"
+  },
+  "V3": {
+   "group": "lp-v3-development",
+   "label": "V3 — хозяйственно-ориентированный",
+   "dataset_id": "195dde92-0361-4224-8a63-d560f684ef7c"
+  }
+ },
+ "blocks": {
+  "nature": "Сохранение природы",
+  "economy": "Хозяйственный эффект",
+  "feasibility": "Реализуемость"
+ },
+ "criteria": [
+  {
+   "id": "nature_value",
+   "block": "nature",
+   "better": "lower",
+   "label": "Земли высокой и очень высокой природной значимости под пашней и орошением",
+   "source": "Интегральная природная значимость (классы 4–5) × варианты ЛП, классы 2 и 4"
+  },
+  {
+   "id": "vulnerable",
+   "block": "nature",
+   "better": "lower",
+   "label": "Земли наибольшей уязвимости под пашней и орошением",
+   "source": "Интегральная уязвимость, класс 3 — наивысший в слое (шкала 1–5) × варианты ЛП, классы 2 и 4"
+  },
+  {
+   "id": "oopt",
+   "block": "nature",
+   "better": "lower",
+   "label": "Особо охраняемые природные территории под пашней и орошением",
+   "source": "Маска ООПТ (смежная команда, 01.10.2026) × варианты ЛП, классы 2 и 4"
+  },
+  {
+   "id": "forest",
+   "block": "nature",
+   "better": "lower",
+   "label": "Земли лесного фонда под пашней и орошением",
+   "source": "Маска лесного фонда (смежная команда, 01.10.2026) × варианты ЛП, классы 2 и 4"
+  },
+  {
+   "id": "suitable_cropland",
+   "block": "economy",
+   "better": "higher",
+   "label": "Пашня и орошение на землях высокой и очень высокой пригодности для богарного земледелия",
+   "source": "Пригодность для богарного земледелия (классы 4–5) × варианты ЛП, классы 2 и 4"
+  },
+  {
+   "id": "economic_area",
+   "block": "economy",
+   "better": "higher",
+   "label": "Площадь хозяйственного использования (орошение, талые воды, пашня, пастбища)",
+   "source": "Варианты ЛП, классы 2–5"
+  },
+  {
+   "id": "agri_withdrawn",
+   "block": "economy",
+   "better": "lower",
+   "label": "Сельхозугодья, выводимые из оборота под регулируемое природопользование",
+   "source": "Маска сельхозугодий 2025 г. × варианты ЛП, класс 1"
+  },
+  {
+   "id": "land_change",
+   "block": "feasibility",
+   "better": "lower",
+   "label": "Объём изменения землепользования",
+   "source": "Сельхозугодья под регулируемое природопользование + распашка и орошение земель, не являющихся сельхозугодьями (прочие, ООПТ, лес)"
+  }
+ ],
+ "historical_max_change_per_year": 313.7,
+ "oblast": {
+  "V1": {
+   "nature_value": 0.0,
+   "vulnerable": 1134.1,
+   "oopt": 322.8,
+   "forest": 3.8,
+   "suitable_cropland": 4350.4,
+   "economic_area": 4776.5,
+   "agri_withdrawn": 217.9,
+   "land_change": 1108.5
+  },
+  "V2": {
+   "nature_value": 1279.5,
+   "vulnerable": 1174.5,
+   "oopt": 560.2,
+   "forest": 22.8,
+   "suitable_cropland": 5625.7,
+   "economic_area": 6357.3,
+   "agri_withdrawn": 29.7,
+   "land_change": 2028.9
+  },
+  "V3": {
+   "nature_value": 1721.5,
+   "vulnerable": 1239.8,
+   "oopt": 626.1,
+   "forest": 78.4,
+   "suitable_cropland": 6021.5,
+   "economic_area": 6837.0,
+   "agri_withdrawn": 11.9,
+   "land_change": 2432.7
+  }
+ },
+ "territories": [
+  {
+   "kato": "591000000",
+   "name": "Петропавловск Г.А.",
+   "values": {
+    "V1": {
+     "nature_value": 0.0,
+     "vulnerable": 0.0,
+     "oopt": 0.0,
+     "forest": 0.0,
+     "suitable_cropland": 0.1,
+     "economic_area": 0.1,
+     "agri_withdrawn": 0.0,
+     "land_change": 0.0
+    },
+    "V2": {
+     "nature_value": 1.5,
+     "vulnerable": 0.0,
+     "oopt": 0.0,
+     "forest": 0.0,
+     "suitable_cropland": 1.5,
+     "economic_area": 1.7,
+     "agri_withdrawn": 0.0,
+     "land_change": 1.5
+    },
+    "V3": {
+     "nature_value": 1.6,
+     "vulnerable": 0.0,
+     "oopt": 0.0,
+     "forest": 0.1,
+     "suitable_cropland": 1.6,
+     "economic_area": 1.8,
+     "agri_withdrawn": 0.0,
+     "land_change": 1.6
+    }
+   }
+  },
+  {
+   "kato": "593200000",
+   "name": "Айыртауский район",
+   "values": {
+    "V1": {
+     "nature_value": 0.0,
+     "vulnerable": 61.5,
+     "oopt": 204.5,
+     "forest": 0.8,
+     "suitable_cropland": 347.8,
+     "economic_area": 351.7,
+     "agri_withdrawn": 6.6,
+     "land_change": 216.4
+    },
+    "V2": {
+     "nature_value": 140.9,
+     "vulnerable": 65.7,
+     "oopt": 297.6,
+     "forest": 2.1,
+     "suitable_cropland": 488.0,
+     "economic_area": 524.0,
+     "agri_withdrawn": 1.6,
+     "land_change": 346.9
+    },
+    "V3": {
+     "nature_value": 216.7,
+     "vulnerable": 66.1,
+     "oopt": 345.4,
+     "forest": 12.9,
+     "suitable_cropland": 557.1,
+     "economic_area": 603.5,
+     "agri_withdrawn": 0.6,
+     "land_change": 420.3
+    }
+   }
+  },
+  {
+   "kato": "593400000",
+   "name": "Акжарский район",
+   "values": {
+    "V1": {
+     "nature_value": 0.0,
+     "vulnerable": 193.7,
+     "oopt": 0.0,
+     "forest": 0.1,
+     "suitable_cropland": 321.0,
+     "economic_area": 402.2,
+     "agri_withdrawn": 6.5,
+     "land_change": 89.1
+    },
+    "V2": {
+     "nature_value": 25.6,
+     "vulnerable": 201.9,
+     "oopt": 0.0,
+     "forest": 0.3,
+     "suitable_cropland": 346.6,
+     "economic_area": 498.5,
+     "agri_withdrawn": 1.5,
+     "land_change": 105.7
+    },
+    "V3": {
+     "nature_value": 80.1,
+     "vulnerable": 216.4,
+     "oopt": 0.0,
+     "forest": 0.4,
+     "suitable_cropland": 396.8,
+     "economic_area": 553.5,
+     "agri_withdrawn": 0.0,
+     "land_change": 157.5
+    }
+   }
+  },
+  {
+   "kato": "595800000",
+   "name": "Аккайынский район",
+   "values": {
+    "V1": {
+     "nature_value": 0.0,
+     "vulnerable": 34.2,
+     "oopt": 50.5,
+     "forest": 0.1,
+     "suitable_cropland": 196.5,
+     "economic_area": 202.0,
+     "agri_withdrawn": 9.0,
+     "land_change": 61.6
+    },
+    "V2": {
+     "nature_value": 101.6,
+     "vulnerable": 35.8,
+     "oopt": 88.0,
+     "forest": 0.5,
+     "suitable_cropland": 298.0,
+     "economic_area": 314.1,
+     "agri_withdrawn": 1.1,
+     "land_change": 147.1
+    },
+    "V3": {
+     "nature_value": 112.8,
+     "vulnerable": 36.0,
+     "oopt": 92.7,
+     "forest": 1.3,
+     "suitable_cropland": 307.3,
+     "economic_area": 330.6,
+     "agri_withdrawn": 0.5,
+     "land_change": 157.1
+    }
+   }
+  },
+  {
+   "kato": "594200000",
+   "name": "Есильский район",
+   "values": {
+    "V1": {
+     "nature_value": 0.0,
+     "vulnerable": 14.5,
+     "oopt": 7.9,
+     "forest": 0.3,
+     "suitable_cropland": 279.7,
+     "economic_area": 282.1,
+     "agri_withdrawn": 12.9,
+     "land_change": 22.9
+    },
+    "V2": {
+     "nature_value": 77.8,
+     "vulnerable": 15.0,
+     "oopt": 13.2,
+     "forest": 1.9,
+     "suitable_cropland": 357.4,
+     "economic_area": 369.1,
+     "agri_withdrawn": 1.1,
+     "land_change": 77.0
+    },
+    "V3": {
+     "nature_value": 88.4,
+     "vulnerable": 15.1,
+     "oopt": 14.6,
+     "forest": 6.2,
+     "suitable_cropland": 366.3,
+     "economic_area": 380.7,
+     "agri_withdrawn": 0.5,
+     "land_change": 86.3
+    }
+   }
+  },
+  {
+   "kato": "594600000",
+   "name": "Жамбылский район",
+   "values": {
+    "V1": {
+     "nature_value": 0.0,
+     "vulnerable": 7.8,
+     "oopt": 0.0,
+     "forest": 0.3,
+     "suitable_cropland": 262.9,
+     "economic_area": 265.0,
+     "agri_withdrawn": 41.8,
+     "land_change": 45.9
+    },
+    "V2": {
+     "nature_value": 190.8,
+     "vulnerable": 8.9,
+     "oopt": 0.0,
+     "forest": 6.2,
+     "suitable_cropland": 452.8,
+     "economic_area": 466.7,
+     "agri_withdrawn": 3.5,
+     "land_change": 159.8
+    },
+    "V3": {
+     "nature_value": 206.7,
+     "vulnerable": 8.9,
+     "oopt": 0.0,
+     "forest": 14.9,
+     "suitable_cropland": 467.6,
+     "economic_area": 482.7,
+     "agri_withdrawn": 2.7,
+     "land_change": 174.2
+    }
+   }
+  },
+  {
+   "kato": "595000000",
+   "name": "Кызылжарский район",
+   "values": {
+    "V1": {
+     "nature_value": 0.0,
+     "vulnerable": 9.7,
+     "oopt": 36.8,
+     "forest": 0.3,
+     "suitable_cropland": 164.7,
+     "economic_area": 168.1,
+     "agri_withdrawn": 25.6,
+     "land_change": 63.7
+    },
+    "V2": {
+     "nature_value": 155.7,
+     "vulnerable": 11.5,
+     "oopt": 109.6,
+     "forest": 2.0,
+     "suitable_cropland": 320.0,
+     "economic_area": 331.4,
+     "agri_withdrawn": 4.0,
+     "land_change": 176.4
+    },
+    "V3": {
+     "nature_value": 169.8,
+     "vulnerable": 11.6,
+     "oopt": 116.7,
+     "forest": 6.4,
+     "suitable_cropland": 328.0,
+     "economic_area": 352.8,
+     "agri_withdrawn": 3.1,
+     "land_change": 188.8
+    }
+   }
+  },
+  {
+   "kato": "595200000",
+   "name": "Мамлютский район",
+   "values": {
+    "V1": {
+     "nature_value": 0.0,
+     "vulnerable": 2.3,
+     "oopt": 5.1,
+     "forest": 0.2,
+     "suitable_cropland": 144.8,
+     "economic_area": 145.4,
+     "agri_withdrawn": 27.4,
+     "land_change": 33.9
+    },
+    "V2": {
+     "nature_value": 87.6,
+     "vulnerable": 2.7,
+     "oopt": 20.4,
+     "forest": 1.9,
+     "suitable_cropland": 232.3,
+     "economic_area": 242.4,
+     "agri_withdrawn": 2.6,
+     "land_change": 71.5
+    },
+    "V3": {
+     "nature_value": 102.4,
+     "vulnerable": 2.7,
+     "oopt": 23.5,
+     "forest": 6.6,
+     "suitable_cropland": 245.6,
+     "economic_area": 259.5,
+     "agri_withdrawn": 1.9,
+     "land_change": 84.9
+    }
+   }
+  },
+  {
+   "kato": "596000000",
+   "name": "Тайыншинский район",
+   "values": {
+    "V1": {
+     "nature_value": 0.0,
+     "vulnerable": 228.6,
+     "oopt": 5.4,
+     "forest": 0.0,
+     "suitable_cropland": 597.2,
+     "economic_area": 685.8,
+     "agri_withdrawn": 11.1,
+     "land_change": 72.6
+    },
+    "V2": {
+     "nature_value": 88.2,
+     "vulnerable": 235.6,
+     "oopt": 6.5,
+     "forest": 0.3,
+     "suitable_cropland": 685.3,
+     "economic_area": 823.3,
+     "agri_withdrawn": 1.9,
+     "land_change": 146.2
+    },
+    "V3": {
+     "nature_value": 137.5,
+     "vulnerable": 240.8,
+     "oopt": 6.6,
+     "forest": 0.7,
+     "suitable_cropland": 726.8,
+     "economic_area": 872.8,
+     "agri_withdrawn": 0.2,
+     "land_change": 191.6
+    }
+   }
+  },
+  {
+   "kato": "596200000",
+   "name": "Тимирязевский район",
+   "values": {
+    "V1": {
+     "nature_value": 0.0,
+     "vulnerable": 23.2,
+     "oopt": 10.3,
+     "forest": 0.1,
+     "suitable_cropland": 261.9,
+     "economic_area": 272.5,
+     "agri_withdrawn": 7.0,
+     "land_change": 21.7
+    },
+    "V2": {
+     "nature_value": 71.6,
+     "vulnerable": 24.3,
+     "oopt": 16.8,
+     "forest": 0.3,
+     "suitable_cropland": 333.5,
+     "economic_area": 354.0,
+     "agri_withdrawn": 0.9,
+     "land_change": 81.1
+    },
+    "V3": {
+     "nature_value": 75.9,
+     "vulnerable": 24.4,
+     "oopt": 17.9,
+     "forest": 0.8,
+     "suitable_cropland": 337.1,
+     "economic_area": 358.4,
+     "agri_withdrawn": 0.4,
+     "land_change": 84.4
+    }
+   }
+  },
+  {
+   "kato": "596400000",
+   "name": "Уалихановский район",
+   "values": {
+    "V1": {
+     "nature_value": 0.0,
+     "vulnerable": 148.7,
+     "oopt": 0.0,
+     "forest": 0.1,
+     "suitable_cropland": 454.2,
+     "economic_area": 599.6,
+     "agri_withdrawn": 16.5,
+     "land_change": 374.9
+    },
+    "V2": {
+     "nature_value": 3.8,
+     "vulnerable": 152.3,
+     "oopt": 0.0,
+     "forest": 0.2,
+     "suitable_cropland": 458.0,
+     "economic_area": 670.7,
+     "agri_withdrawn": 5.6,
+     "land_change": 370.8
+    },
+    "V3": {
+     "nature_value": 135.3,
+     "vulnerable": 194.0,
+     "oopt": 0.0,
+     "forest": 0.2,
+     "suitable_cropland": 586.2,
+     "economic_area": 807.2,
+     "agri_withdrawn": 0.2,
+     "land_change": 490.0
+    }
+   }
+  },
+  {
+   "kato": "593600000",
+   "name": "Район Магжана Жумабаева",
+   "values": {
+    "V1": {
+     "nature_value": 0.0,
+     "vulnerable": 132.8,
+     "oopt": 0.3,
+     "forest": 0.9,
+     "suitable_cropland": 396.3,
+     "economic_area": 406.8,
+     "agri_withdrawn": 20.1,
+     "land_change": 24.1
+    },
+    "V2": {
+     "nature_value": 129.4,
+     "vulnerable": 136.1,
+     "oopt": 4.7,
+     "forest": 3.6,
+     "suitable_cropland": 525.7,
+     "economic_area": 552.1,
+     "agri_withdrawn": 3.2,
+     "land_change": 120.9
+    },
+    "V3": {
+     "nature_value": 144.6,
+     "vulnerable": 137.3,
+     "oopt": 4.9,
+     "forest": 7.2,
+     "suitable_cropland": 538.6,
+     "economic_area": 569.8,
+     "agri_withdrawn": 0.7,
+     "land_change": 131.3
+    }
+   }
+  },
+  {
+   "kato": "595600000",
+   "name": "Район Шал акына",
+   "values": {
+    "V1": {
+     "nature_value": 0.0,
+     "vulnerable": 21.3,
+     "oopt": 1.8,
+     "forest": 0.2,
+     "suitable_cropland": 244.5,
+     "economic_area": 245.8,
+     "agri_withdrawn": 16.2,
+     "land_change": 23.0
+    },
+    "V2": {
+     "nature_value": 103.4,
+     "vulnerable": 22.2,
+     "oopt": 3.0,
+     "forest": 1.3,
+     "suitable_cropland": 347.4,
+     "economic_area": 351.4,
+     "agri_withdrawn": 1.1,
+     "land_change": 95.7
+    },
+    "V3": {
+     "nature_value": 116.2,
+     "vulnerable": 22.3,
+     "oopt": 3.5,
+     "forest": 8.4,
+     "suitable_cropland": 353.9,
+     "economic_area": 373.1,
+     "agri_withdrawn": 0.7,
+     "land_change": 107.5
+    }
+   }
+  },
+  {
+   "kato": "596600000",
+   "name": "Район им. Габита Мусрепова",
+   "values": {
+    "V1": {
+     "nature_value": 0.0,
+     "vulnerable": 255.7,
+     "oopt": 0.3,
+     "forest": 0.4,
+     "suitable_cropland": 678.7,
+     "economic_area": 749.3,
+     "agri_withdrawn": 17.3,
+     "land_change": 58.5
+    },
+    "V2": {
+     "nature_value": 101.4,
+     "vulnerable": 262.3,
+     "oopt": 0.3,
+     "forest": 2.2,
+     "suitable_cropland": 779.0,
+     "economic_area": 858.0,
+     "agri_withdrawn": 1.9,
+     "land_change": 128.5
+    },
+    "V3": {
+     "nature_value": 133.5,
+     "vulnerable": 264.3,
+     "oopt": 0.3,
+     "forest": 12.3,
+     "suitable_cropland": 808.7,
+     "economic_area": 890.8,
+     "agri_withdrawn": 0.4,
+     "land_change": 157.2
+    }
+   }
+  }
+ ],
+ "sources": [
+  "Варианты функционального зонирования V1–V3 (ГИС-контур, расчёт ЛП от 11.09.2026), полное разрешение 30,9 м",
+  "Интегральная природная значимость, интегральная уязвимость, пригодность для богарного земледелия — слои того же расчёта ЛП",
+  "Маски категорий земель (сельхозугодья 2025, лесной фонд, ООПТ, вода, населённые пункты, дороги) — смежная команда, 01.10.2026",
+  "Максимальный годовой оборот земель — земельный баланс СКО 2014–2024 гг. (3,2 % площади области)"
+ ],
+ "limitations": [
+  "Классы вариантов — приоритетные направления использования, а не категории земель: площади показывают, что вариант предлагает, а не что будет сделано.",
+  "24 % области (вода, населённые пункты, часть сельхозугодий и прочих земель) в вариантах не зонирована и в критерии не входит.",
+  "Интегральная уязвимость принимает значения 1–3 из шкалы 1–5; «наибольшая уязвимость» — класс 3.",
+  "Критерии частично пересекаются (например, ООПТ входит и в природный блок, и в объём изменений) — это учитывается при назначении весов.",
+  "Экологический блок индекса устойчивого развития по районам и стоимость перевода земель отсутствуют — эти критерии не учтены."
+ ]
+}

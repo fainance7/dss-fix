@@ -1,0 +1,1698 @@
+openapi: 3.1.1
+info:
+  title: GIS API
+  version: "1.0.0"
+  summary: Hierarchical categories and geo datasets with async processing.
+  description: |
+    HTTP API for hierarchical categories and geo datasets (vector,
+    vector_with_kato, raster).
+
+    Datasets are processed asynchronously after upload, dispatched by `file_type`:
+      - `vector` — the attribute table is extracted and, with the geometry,
+        assembled into the `.geojson` output.
+      - `raster` — converted to a Cloud-Optimized GeoTIFF (served at
+        `GET /datasets/{id}.cog`); `bbox` is derived from the raster extent.
+      - `vector_with_kato` — columns are detected for selection; the client then
+        submits a KATO/year mapping, unpivoted into observations.
+
+    Poll `GET /datasets/{id}/status` (optionally long-polling) to follow progress
+    through the status lifecycle:
+    `pending → processing|parsing → awaiting_mapping → extracting → ready`
+    (or `failed`).
+  license:
+    name: Proprietary
+
+servers:
+  - url: https://dssgis.dwh.kz/
+    description: Production
+
+tags:
+  - name: Health
+    description: Liveness and readiness probes
+  - name: Categories
+    description: Hierarchical dataset categories
+  - name: Datasets
+    description: Geo dataset upload, processing, and retrieval
+  - name: Dataset Groups
+    description: Groups of same-named datasets versioned by period
+  - name: Landscape
+    description: >-
+      Landscape Program (ЛП): raster inputs, graph runs, and computed results
+
+paths:
+  /healthz:
+    get:
+      tags: [Health]
+      summary: Liveness probe
+      responses:
+        "200":
+          description: Process is alive
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+
+  /readyz:
+    get:
+      tags: [Health]
+      summary: Readiness probe
+      description: Runs dependency checks (Postgres, S3/MinIO, RabbitMQ).
+      responses:
+        "200":
+          description: All dependencies reachable
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Readiness" }
+        "503":
+          description: One or more dependencies unavailable
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Readiness" }
+
+  /categories:
+    get:
+      tags: [Categories]
+      summary: List categories
+      parameters:
+        - name: parent_id
+          in: query
+          required: false
+          description: Filter to the direct children of this category.
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Categories ordered by name
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/Category" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+    post:
+      tags: [Categories]
+      summary: Create a category
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CategoryInput" }
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Category" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+
+  /categories/{id}:
+    parameters:
+      - $ref: "#/components/parameters/IdParam"
+    get:
+      tags: [Categories]
+      summary: Get a category
+      responses:
+        "200":
+          description: The category
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Category" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    put:
+      tags: [Categories]
+      summary: Update a category
+      description: |
+        Updates name, description, and parent. The new parent must exist and must
+        not create a cycle (a category cannot be its own ancestor).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CategoryInput" }
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Category" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+    delete:
+      tags: [Categories]
+      summary: Delete a category
+      description: Fails with 409 if datasets or child categories still reference it.
+      responses:
+        "204": { description: Deleted }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+
+  /dataset-groups:
+    get:
+      tags: [Dataset Groups]
+      summary: List dataset groups (paginated)
+      parameters:
+        - name: code
+          in: query
+          required: false
+          description: Filter by exact group code.
+          schema:
+            type: string
+        - $ref: "#/components/parameters/PageParam"
+        - $ref: "#/components/parameters/PageSizeParam"
+      responses:
+        "200":
+          description: Groups ordered by code
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DatasetGroupPage" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+    post:
+      tags: [Dataset Groups]
+      summary: Create a dataset group
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/DatasetGroupInput" }
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DatasetGroup" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+
+  /dataset-groups/{id}:
+    parameters:
+      - $ref: "#/components/parameters/IdParam"
+    get:
+      tags: [Dataset Groups]
+      summary: Get a dataset group
+      responses:
+        "200":
+          description: The group
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DatasetGroup" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    put:
+      tags: [Dataset Groups]
+      summary: Update a dataset group
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/DatasetGroupInput" }
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DatasetGroup" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+    delete:
+      tags: [Dataset Groups]
+      summary: Delete a dataset group
+      description: Fails with 409 if datasets still reference the group.
+      responses:
+        "204": { description: Deleted }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+
+  /dataset-groups/{id}/latest:
+    parameters:
+      - $ref: "#/components/parameters/IdParam"
+    get:
+      tags: [Dataset Groups]
+      summary: Get the freshest dataset of a group
+      description: |
+        Returns the group's dataset with the greatest `end_date` (datasets
+        without an `end_date` come last, ties broken by newest `created_at`).
+        Returns 404 when the group does not exist or has no matching dataset.
+      parameters:
+        - name: status
+          in: query
+          required: false
+          description: Only consider datasets in this status.
+          schema: { $ref: "#/components/schemas/DatasetStatus" }
+        - name: file_type
+          in: query
+          required: false
+          description: Only consider datasets of this file type.
+          schema: { $ref: "#/components/schemas/FileType" }
+      responses:
+        "200":
+          description: The freshest dataset in the group
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Dataset" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /dataset-groups/{id}/sld:
+    parameters:
+      - $ref: "#/components/parameters/IdParam"
+    post:
+      tags: [Dataset Groups]
+      summary: Upload (or replace) a group's shared SLD style file
+      description: |
+        Multipart upload of an SLD (Styled Layer Descriptor) style file shared by
+        every dataset of the group. A dataset with no SLD of its own falls back
+        to this one on `GET /datasets/{id}/sld`. Uploading again replaces the
+        previously stored SLD.
+
+        Allowed extensions: `.sld`, `.xml`.
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file:
+                  type: string
+                  format: binary
+                  description: The SLD file.
+      responses:
+        "200":
+          description: SLD stored; the updated group
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DatasetGroup" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+    get:
+      tags: [Dataset Groups]
+      summary: Download a group's shared SLD style file
+      description: Returns 404 if no SLD has been uploaded for this group yet.
+      responses:
+        "200":
+          description: The SLD file stream
+          content:
+            application/xml:
+              schema:
+                type: string
+                format: binary
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /datasets:
+    get:
+      tags: [Datasets]
+      summary: List datasets (paginated summaries)
+      parameters:
+        - $ref: "#/components/parameters/PageParam"
+        - $ref: "#/components/parameters/PageSizeParam"
+        - name: category_id
+          in: query
+          required: false
+          description: Filter to a category by id.
+          schema:
+            type: string
+            format: uuid
+        - name: category_code
+          in: query
+          required: false
+          description: >-
+            Filter to a category by its code (slug). An unknown code yields an
+            empty page.
+          schema:
+            type: string
+        - name: file_type
+          in: query
+          required: false
+          description: Filter by file type.
+          schema:
+            type: string
+            enum: [vector_with_kato, vector, raster]
+        - name: automated
+          in: query
+          required: false
+          description: Filter by the automated flag.
+          schema:
+            type: boolean
+        - name: status
+          in: query
+          required: false
+          description: Filter by lifecycle status.
+          schema:
+            type: string
+            enum:
+              [pending, parsing, processing, awaiting_mapping, extracting, ready, failed]
+        - name: dg_id
+          in: query
+          required: false
+          description: Filter to a dataset group by id.
+          schema:
+            type: string
+            format: uuid
+        - name: start_date_from
+          in: query
+          required: false
+          description: Keep datasets whose `start_date` is on or after this date.
+          schema:
+            type: string
+            format: date
+        - name: start_date_to
+          in: query
+          required: false
+          description: Keep datasets whose `start_date` is on or before this date.
+          schema:
+            type: string
+            format: date
+        - name: end_date_from
+          in: query
+          required: false
+          description: Keep datasets whose `end_date` is on or after this date.
+          schema:
+            type: string
+            format: date
+        - name: end_date_to
+          in: query
+          required: false
+          description: Keep datasets whose `end_date` is on or before this date.
+          schema:
+            type: string
+            format: date
+      responses:
+        "200":
+          description: A page of dataset summaries
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DatasetSummaryPage" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+    post:
+      tags: [Datasets]
+      summary: Upload a dataset
+      description: |
+        Multipart upload, validated by `file_type`, extension, and a content
+        magic-byte check, then processed asynchronously (poll
+        `GET /datasets/{id}/status`).
+
+        Allowed extensions: `vector`/`vector_with_kato` = `.geojson`/`.gpkg`/`.zip`;
+        `raster` = `.tif`/`.tiff`.
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file, file_type, category_id]
+              properties:
+                file:
+                  type: string
+                  format: binary
+                  description: The geo file.
+                file_type:
+                  $ref: "#/components/schemas/FileType"
+                category_id:
+                  type: string
+                  format: uuid
+                name:
+                  type: string
+                  description: Display name; defaults to the filename if omitted.
+                description:
+                  type: string
+                unit:
+                  type: string
+                meta:
+                  type: string
+                  description: Arbitrary user JSON (sent as a JSON string).
+                automated:
+                  type: boolean
+                dg_id:
+                  type: string
+                  format: uuid
+                  description: Optional dataset group the dataset belongs to.
+                start_date:
+                  type: string
+                  format: date
+                  description: Start of the period the dataset describes.
+                end_date:
+                  type: string
+                  format: date
+                  description: >-
+                    End of the period (inclusive); must not be before
+                    `start_date`.
+      responses:
+        "201":
+          description: Dataset created; processing enqueued
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Dataset" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+
+  /datasets/{id}:
+    parameters:
+      - $ref: "#/components/parameters/IdParam"
+    get:
+      tags: [Datasets]
+      summary: Get a dataset
+      description: |
+        Dataset metadata, plus `bbox` for rasters. The heavy `geometry` and
+        `properties` fields are not included; fetch geometry via
+        `GET /datasets/{id}.geojson` and a raster's COG via
+        `GET /datasets/{id}.cog`.
+      responses:
+        "200":
+          description: The dataset
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Dataset" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    put:
+      tags: [Datasets]
+      summary: Replace a dataset's editable metadata
+      description: |
+        Updates category, name, description, and unit. Every field is
+        required; the file, file type, and processing/lifecycle state are
+        never touched here. Sending an empty string for `description` or
+        `unit` clears that (optional) field. `dg_id`, `start_date` and
+        `end_date` are optional: omitting one clears that (nullable) column.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/DatasetPut" }
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Dataset" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+    patch:
+      tags: [Datasets]
+      summary: Partially update a dataset's editable metadata
+      description: |
+        Updates only the fields present in the body, from category, name,
+        description, unit, `dg_id`, `start_date` and `end_date`. The file,
+        file type, and processing/lifecycle state are never touched here.
+        Sending an explicit `null` for a nullable field clears it; omitting a
+        field leaves it unchanged.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/DatasetPatch" }
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Dataset" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+    delete:
+      tags: [Datasets]
+      summary: Delete a dataset
+      description: Removes the row and the stored object(s).
+      responses:
+        "204": { description: Deleted }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /datasets/{id}.geojson:
+    parameters:
+      - $ref: "#/components/parameters/IdParam"
+    get:
+      tags: [Datasets]
+      summary: Get a dataset as GeoJSON (vector / vector_with_kato)
+      description: |
+        Assembles a GeoJSON `FeatureCollection` (RFC 7946) from the dataset.
+
+        A plain `vector` dataset has no KATO mapping or observations, so the
+        result is a single Feature wrapping the dataset's own (dissolved)
+        geometry. Its extracted attribute table (e.g. a GeoPackage's table data,
+        stored in `properties`) is exposed as the Feature's top-level properties:
+        a single row becomes the properties object directly, multiple rows are
+        kept under a `rows` key. An empty collection is returned when the dataset
+        has no geometry.
+
+        A `vector_with_kato` dataset always ignores any geometry it carries and
+        joins the `districts` table on KATO code: one Feature is emitted per KATO,
+        its boundary taken from the matching district and the per-year observation
+        values nested under a `data` object (keyed by date) alongside `kato` and
+        `name`. KATO codes with no matching district are skipped.
+
+        Only `ready` datasets are served: a dataset still being processed
+        returns 409. Other file types (e.g. `raster`) return 422.
+      responses:
+        "200":
+          description: The dataset as a GeoJSON FeatureCollection
+          content:
+            application/geo+json:
+              schema: { $ref: "#/components/schemas/GeoJSONFeatureCollection" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+
+  /datasets/{id}.cog:
+    parameters:
+      - $ref: "#/components/parameters/IdParam"
+    get:
+      tags: [Datasets]
+      summary: Get a raster dataset's Cloud-Optimized GeoTIFF
+      description: |
+        Streams the raster dataset's Cloud-Optimized GeoTIFF (`image/tiff`),
+        produced when a `raster` upload is converted.
+
+        Only `raster` datasets are served: other file types return 422, and a
+        raster whose COG has not been produced yet returns 409.
+      responses:
+        "200":
+          description: The Cloud-Optimized GeoTIFF
+          content:
+            image/tiff:
+              schema: { type: string, format: binary }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+
+  /datasets/{id}/status:
+    parameters:
+      - $ref: "#/components/parameters/IdParam"
+    get:
+      tags: [Datasets]
+      summary: Get processing status (supports long polling)
+      description: |
+        Returns the current status immediately. If `current` is supplied, the
+        request is held until the status differs from it, or until `wait` seconds
+        elapse (then the unchanged status is returned).
+      parameters:
+        - name: current
+          in: query
+          required: false
+          description: The client's last-known status; enables long polling.
+          schema: { $ref: "#/components/schemas/DatasetStatus" }
+        - name: wait
+          in: query
+          required: false
+          description: Max seconds to hold the request (default 25, max 60).
+          schema:
+            type: integer
+            minimum: 0
+            maximum: 60
+            default: 25
+      responses:
+        "200":
+          description: The dataset's status
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DatasetStatusInfo" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /datasets/{id}/download:
+    parameters:
+      - $ref: "#/components/parameters/IdParam"
+    get:
+      tags: [Datasets]
+      summary: Download the original uploaded file
+      responses:
+        "200":
+          description: The file stream
+          content:
+            application/octet-stream:
+              schema:
+                type: string
+                format: binary
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /datasets/{id}/sld:
+    parameters:
+      - $ref: "#/components/parameters/IdParam"
+    post:
+      tags: [Datasets]
+      summary: Upload (or replace) a dataset's SLD style file
+      description: |
+        Multipart upload of an SLD (Styled Layer Descriptor) style file,
+        mirroring `POST /datasets`. Applies to every `file_type`. Uploading
+        again replaces the previously stored SLD.
+
+        Allowed extensions: `.sld`, `.xml`.
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file:
+                  type: string
+                  format: binary
+                  description: The SLD file.
+      responses:
+        "200":
+          description: SLD stored; the updated dataset
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Dataset" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+    get:
+      tags: [Datasets]
+      summary: Download a dataset's SLD style file
+      description: |
+        Returns the dataset's own SLD. When the dataset has none but belongs to a
+        dataset group that carries a shared SLD, the group's SLD is returned
+        instead. Returns 404 when neither exists.
+      responses:
+        "200":
+          description: The SLD file stream
+          content:
+            application/xml:
+              schema:
+                type: string
+                format: binary
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /datasets/{id}/mapping:
+    parameters:
+      - $ref: "#/components/parameters/IdParam"
+    post:
+      tags: [Datasets]
+      summary: Set the KATO column and year mapping (vector_with_kato)
+      description: |
+        Valid only for `vector_with_kato` datasets in `awaiting_mapping` (or
+        `ready`, to re-map). The KATO column and every mapped column must be among
+        the dataset's detected `attribute_columns`. Moves the dataset to
+        `extracting`; observations are produced asynchronously.
+
+        Each year column maps to either a single point in time (`start_date`
+        only, the original behavior) or a period (`start_date` and `end_date`,
+        inclusive). `end_date`, when present, must not be before `start_date`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/MappingInput" }
+      responses:
+        "200":
+          description: Mapping saved; extraction enqueued
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Dataset" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+
+  /datasets/{id}/observations:
+    parameters:
+      - $ref: "#/components/parameters/IdParam"
+    get:
+      tags: [Datasets]
+      summary: List a dataset's observations (paginated)
+      description: Long-format values unpivoted from a vector_with_kato dataset.
+      parameters:
+        - name: kato_code
+          in: query
+          required: false
+          description: Filter to a single KATO code.
+          schema:
+            type: string
+        - $ref: "#/components/parameters/PageParam"
+        - $ref: "#/components/parameters/PageSizeParam"
+      responses:
+        "200":
+          description: A page of observations
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ObservationPage" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /landscape/slots:
+    get:
+      tags: [Landscape]
+      summary: List the Landscape Program input slots
+      description: |
+        Every leaf input group of the computation graph, in graph order, with
+        the dataset currently filling it (any status) or `null` when nothing
+        has been uploaded yet.
+
+        Yields 404 when a slot's dataset group is missing — that means
+        migration `00011_landscape.sql`, which seeds the groups, has not been
+        applied to this database.
+      responses:
+        "200":
+          description: The input slots
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/LandscapeSlot" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /landscape/slots/{code}:
+    parameters:
+      - name: code
+        in: path
+        required: true
+        description: Slot (dataset group) code, e.g. `lp-z-biodiversity`.
+        schema:
+          type: string
+    post:
+      tags: [Landscape]
+      summary: Upload a raster into an input slot
+      description: |
+        Multipart upload of a GeoTIFF (`.tif`/`.tiff`, TIFF magic bytes checked)
+        into the slot's dataset group under the `landscape` category. It goes
+        through the regular raster upload path, so the COG conversion is
+        enqueued as usual. An unknown slot code yields 404.
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file:
+                  type: string
+                  format: binary
+                  description: The GeoTIFF to store in the slot.
+                name:
+                  type: string
+                  description: Dataset name; defaults to the uploaded file name.
+                start_date:
+                  type: string
+                  format: date
+                  description: Start of the period the raster describes.
+                end_date:
+                  type: string
+                  format: date
+                  description: >-
+                    End of the period (inclusive); drives the "freshest in
+                    group" rule used to resolve run inputs.
+      responses:
+        "201":
+          description: The created dataset
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Dataset" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+
+  /landscape/runs:
+    get:
+      tags: [Landscape]
+      summary: List Landscape Program runs (paginated, newest first)
+      parameters:
+        - $ref: "#/components/parameters/PageParam"
+        - $ref: "#/components/parameters/PageSizeParam"
+      responses:
+        "200":
+          description: A page of runs
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/LandscapeRunPage" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+    post:
+      tags: [Landscape]
+      summary: Queue a Landscape Program run
+      description: |
+        Validates the params and overrides, persists the run with one pending
+        node per graph node, and publishes the worker job. Returns 202: the
+        graph is executed asynchronously, poll `GET /landscape/runs/{id}`.
+
+        Every field has a default, so the body is optional: sending no body at
+        all (or `{}`) starts a default incremental run.
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/LandscapeRunInput" }
+      responses:
+        "202":
+          description: Run queued
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/LandscapeRun" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+
+  /landscape/runs/{id}:
+    parameters:
+      - $ref: "#/components/parameters/IdParam"
+    get:
+      tags: [Landscape]
+      summary: Get a Landscape Program run with its nodes
+      responses:
+        "200":
+          description: The run
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/LandscapeRun" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /landscape/results:
+    get:
+      tags: [Landscape]
+      summary: List the Landscape Program result layers
+      description: |
+        One entry per output group of the graph with its freshest `ready`
+        raster, the COG URL to render it, and the group's SLD URL when one has
+        been uploaded. `latest` is `null` while nothing has been computed.
+
+        Yields 404 when an output group is missing — that means migration
+        `00011_landscape.sql`, which seeds the groups, has not been applied to
+        this database.
+      responses:
+        "200":
+          description: The result layers
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/LandscapeResult" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+components:
+  parameters:
+    IdParam:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    PageParam:
+      name: page
+      in: query
+      required: false
+      description: 1-based page number.
+      schema:
+        type: integer
+        minimum: 1
+        default: 1
+    PageSizeParam:
+      name: page_size
+      in: query
+      required: false
+      description: Items per page (default 20, max 100).
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 100
+        default: 20
+
+  responses:
+    BadRequest:
+      description: Malformed request (e.g. invalid UUID or query parameter)
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    Conflict:
+      description: Operation conflicts with existing data (e.g. foreign key)
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    ValidationError:
+      description: Input failed validation
+      content:
+        application/json:
+          schema:
+            oneOf:
+              - { $ref: "#/components/schemas/Error" }
+              - { $ref: "#/components/schemas/ValidationErrors" }
+
+  schemas:
+    Error:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: string
+
+    ValidationErrors:
+      type: object
+      description: Per-field validation messages.
+      properties:
+        errors:
+          type: object
+          additionalProperties:
+            type: string
+
+    Readiness:
+      type: object
+      properties:
+        ready:
+          type: boolean
+        components:
+          type: object
+          additionalProperties:
+            type: string
+
+    FileType:
+      type: string
+      enum: [vector_with_kato, vector, raster]
+
+    DatasetStatus:
+      type: string
+      description: Dataset processing lifecycle status.
+      enum: [pending, processing, parsing, awaiting_mapping, extracting, ready, failed]
+
+    DatasetGroup:
+      type: object
+      description: |
+        A group of same-named datasets delivered for different periods. The
+        freshest member is the one with the greatest `end_date`.
+      required: [id, code, name, description, created_at, updated_at]
+      properties:
+        id:
+          type: string
+          format: uuid
+        code:
+          type: string
+          description: Slug (lowercase latin letters, digits, and dashes).
+        name:
+          type: string
+        description:
+          type: string
+        sld_storage_key:
+          type: [string, "null"]
+          description: Object-store key of the group's shared SLD, if uploaded.
+        sld_filename:
+          type: [string, "null"]
+        sld_content_type:
+          type: [string, "null"]
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    DatasetGroupInput:
+      type: object
+      required: [code, name]
+      properties:
+        code:
+          type: string
+          maxLength: 255
+          pattern: "^[a-z0-9]+(?:-[a-z0-9]+)*$"
+          description: Slug (lowercase latin letters, digits, and dashes).
+        name:
+          type: string
+          maxLength: 255
+        description:
+          type: string
+          maxLength: 2000
+
+    DatasetGroupPage:
+      type: object
+      required: [data, page, page_size, total, total_pages]
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/DatasetGroup"
+        page:
+          type: integer
+        page_size:
+          type: integer
+        total:
+          type: integer
+        total_pages:
+          type: integer
+
+    Category:
+      type: object
+      required: [id, code, name, description, created_at, updated_at]
+      properties:
+        id:
+          type: string
+          format: uuid
+        parent_id:
+          type: [string, "null"]
+          format: uuid
+        code:
+          type: string
+          description: Slug (lowercase latin letters, digits, and dashes).
+        name:
+          type: string
+        description:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    CategoryInput:
+      type: object
+      required: [code, name]
+      properties:
+        parent_id:
+          type: [string, "null"]
+          format: uuid
+        code:
+          type: string
+          maxLength: 255
+          pattern: "^[a-z0-9]+(?:-[a-z0-9]+)*$"
+          description: Slug (lowercase latin letters, digits, and dashes).
+        name:
+          type: string
+          maxLength: 255
+        description:
+          type: string
+          maxLength: 2000
+
+    DatasetPut:
+      type: object
+      required: [category_id, name, description, unit]
+      properties:
+        category_id:
+          type: string
+          format: uuid
+        name:
+          type: string
+          maxLength: 255
+        description:
+          type: string
+          description: An empty string clears the field.
+        unit:
+          type: string
+          description: An empty string clears the field.
+        dg_id:
+          type: [string, "null"]
+          format: uuid
+          description: Dataset group; omitted or null clears the field.
+        start_date:
+          type: [string, "null"]
+          format: date
+          description: Start of the dataset's period; omitted or null clears it.
+        end_date:
+          type: [string, "null"]
+          format: date
+          description: >-
+            End of the dataset's period (inclusive); omitted or null clears it.
+            Must not be before `start_date`.
+
+    DatasetPatch:
+      type: object
+      description: At least one field is required. Omitted fields are left unchanged.
+      minProperties: 1
+      properties:
+        category_id:
+          type: string
+          format: uuid
+        name:
+          type: string
+          maxLength: 255
+        description:
+          type: [string, "null"]
+          description: null clears the field.
+        unit:
+          type: [string, "null"]
+          description: null clears the field.
+        dg_id:
+          type: [string, "null"]
+          format: uuid
+          description: null clears the field.
+        start_date:
+          type: [string, "null"]
+          format: date
+          description: null clears the field.
+        end_date:
+          type: [string, "null"]
+          format: date
+          description: >-
+            null clears the field. Must not be before the resulting
+            `start_date`.
+
+    AttributeColumn:
+      type: object
+      required: [name]
+      properties:
+        name:
+          type: string
+        samples:
+          type: array
+          items:
+            type: string
+
+    YearColumn:
+      type: object
+      required: [column, start_date]
+      properties:
+        column:
+          type: string
+        start_date:
+          type: string
+          format: date
+          description: >-
+            Point in time, or the start of the period when `end_date` is also
+            set.
+        end_date:
+          type: [string, "null"]
+          format: date
+          description: >-
+            Optional period end (inclusive), must not be before `start_date`.
+            Omitted or null means a single point in time (the original,
+            pre-period behavior).
+
+    GeoJSONGeometry:
+      type: [object, "null"]
+      description: A GeoJSON geometry object (e.g. Point, Polygon).
+      properties:
+        type:
+          type: string
+        coordinates: true
+
+    GeoJSONFeature:
+      type: object
+      description: A GeoJSON Feature (RFC 7946).
+      required: [type, geometry, properties]
+      properties:
+        type:
+          type: string
+          enum: [Feature]
+        geometry:
+          $ref: "#/components/schemas/GeoJSONGeometry"
+        properties:
+          type: [object, "null"]
+          description: |
+            Arbitrary key/value map. For per-KATO features (no dataset geometry)
+            this holds `kato`, `name`, and one entry per mapped year keyed by
+            date (YYYY-MM-DD). For the single-feature case (dataset has its own
+            geometry) it holds only the observations, keyed by KATO code, each
+            mapping to its date->value pairs.
+
+            For a `vector_with_kato` dataset mapped with one or more period
+            year columns (`end_date` set), a sibling `periods` object is also
+            present, mapping each period's start date (the same key used in
+            `data`) to its end date. `periods` is omitted entirely when the
+            dataset has no period mappings.
+          additionalProperties: true
+
+    GeoJSONFeatureCollection:
+      type: object
+      description: A GeoJSON FeatureCollection (RFC 7946).
+      required: [type, features]
+      properties:
+        type:
+          type: string
+          enum: [FeatureCollection]
+        features:
+          type: array
+          items:
+            $ref: "#/components/schemas/GeoJSONFeature"
+
+    DatasetSummary:
+      type: object
+      required: [id, category_id, name, file_type, size_bytes, status, created_at, updated_at]
+      properties:
+        id:
+          type: string
+          format: uuid
+        category_id:
+          type: string
+          format: uuid
+        dg_id:
+          type: [string, "null"]
+          format: uuid
+          description: The dataset group this dataset belongs to, if any.
+        start_date:
+          type: [string, "null"]
+          format: date
+          description: Start of the period the dataset describes.
+        end_date:
+          type: [string, "null"]
+          format: date
+          description: >-
+            End of the period (inclusive). Drives the "freshest in group" rule.
+        name:
+          type: string
+        description:
+          type: [string, "null"]
+        unit:
+          type: [string, "null"]
+        file_type:
+          $ref: "#/components/schemas/FileType"
+        size_bytes:
+          type: integer
+          format: int64
+        status:
+          $ref: "#/components/schemas/DatasetStatus"
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    Dataset:
+      type: object
+      required:
+        [id, category_id, name, filename, storage_key, file_type,
+         size_bytes, content_type, automated, status, created_at, updated_at]
+      properties:
+        id:
+          type: string
+          format: uuid
+        category_id:
+          type: string
+          format: uuid
+        dg_id:
+          type: [string, "null"]
+          format: uuid
+          description: The dataset group this dataset belongs to, if any.
+        start_date:
+          type: [string, "null"]
+          format: date
+          description: Start of the period the dataset describes.
+        end_date:
+          type: [string, "null"]
+          format: date
+          description: >-
+            End of the period (inclusive). Drives the "freshest in group" rule.
+        name:
+          type: string
+        description:
+          type: [string, "null"]
+        unit:
+          type: [string, "null"]
+        filename:
+          type: string
+        storage_key:
+          type: string
+        cog_storage_key:
+          type: [string, "null"]
+          description: Set for rasters once the Cloud-Optimized GeoTIFF is produced.
+        sld_storage_key:
+          type: [string, "null"]
+          description: Set once an SLD style file has been uploaded (any file_type).
+        sld_filename:
+          type: [string, "null"]
+        sld_content_type:
+          type: [string, "null"]
+        file_type:
+          $ref: "#/components/schemas/FileType"
+        size_bytes:
+          type: integer
+          format: int64
+        content_type:
+          type: string
+        meta:
+          type: [object, "null"]
+          description: Arbitrary user-supplied JSON.
+        automated:
+          type: boolean
+        status:
+          $ref: "#/components/schemas/DatasetStatus"
+        attribute_columns:
+          type: [array, "null"]
+          description: Detected columns (vector_with_kato), for mapping.
+          items:
+            $ref: "#/components/schemas/AttributeColumn"
+        kato_column:
+          type: [string, "null"]
+        year_columns:
+          type: [array, "null"]
+          items:
+            $ref: "#/components/schemas/YearColumn"
+        parse_error:
+          type: [string, "null"]
+          description: Failure reason when status is `failed`.
+        bbox:
+          type: array
+          description: "[minX, minY, maxX, maxY]; present only for rasters."
+          items:
+            type: number
+          minItems: 4
+          maxItems: 4
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    MappingInput:
+      type: object
+      required: [kato_column, year_columns]
+      properties:
+        kato_column:
+          type: string
+          examples: ["като"]
+        year_columns:
+          type: array
+          minItems: 1
+          items:
+            $ref: "#/components/schemas/YearColumn"
+      examples:
+        - kato_column: "като"
+          year_columns:
+            - { column: F_2023, start_date: "2023-01-01" }
+            - { column: D_2025, start_date: "2025-01-01" }
+
+    Observation:
+      type: object
+      required: [id, dataset_id, kato_code, start_date]
+      properties:
+        id:
+          type: string
+          format: uuid
+        dataset_id:
+          type: string
+          format: uuid
+        kato_code:
+          type: string
+        start_date:
+          type: string
+          format: date
+        end_date:
+          type: [string, "null"]
+          format: date
+          description: >-
+            Period end (inclusive), carried over from the year mapping's
+            `end_date`. Null for a point-in-time observation.
+        value:
+          type: [number, "null"]
+          description: Numeric cell value, or null when non-numeric/empty.
+        value_text:
+          type: [string, "null"]
+          description: Non-numeric cell value, or null.
+
+    DatasetStatusInfo:
+      type: object
+      required: [id, status]
+      properties:
+        id:
+          type: string
+          format: uuid
+        status:
+          $ref: "#/components/schemas/DatasetStatus"
+        parse_error:
+          type: [string, "null"]
+
+    DatasetSummaryPage:
+      type: object
+      required: [data, page, page_size, total, total_pages]
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/DatasetSummary"
+        page:
+          type: integer
+        page_size:
+          type: integer
+        total:
+          type: integer
+        total_pages:
+          type: integer
+
+    ObservationPage:
+      type: object
+      required: [data, page, page_size, total, total_pages]
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/Observation"
+        page:
+          type: integer
+        page_size:
+          type: integer
+        total:
+          type: integer
+        total_pages:
+          type: integer
+
+    LandscapeSlot:
+      type: object
+      description: A leaf input group of the Landscape Program graph.
+      required: [code, title, group_id, latest]
+      properties:
+        code:
+          type: string
+          description: Dataset group code, e.g. `lp-z-biodiversity`.
+        title:
+          type: string
+        group_id:
+          type: string
+          format: uuid
+        latest:
+          oneOf:
+            - $ref: "#/components/schemas/DatasetSummary"
+            - type: "null"
+          description: The freshest dataset of the slot's group, any status.
+
+    LandscapeParams:
+      type: object
+      description: |
+        Run-time knobs of the graph. Every field is optional; omitted fields
+        take the defaults shown below.
+      properties:
+        window_size:
+          type: integer
+          minimum: 256
+          maximum: 8192
+          default: 2048
+          description: Side of the square window the executor tiles rasters into.
+        tie_priority:
+          type: array
+          description: >-
+            Sector preference when several sectors tie in functional zoning; a
+            permutation of 1..5 (1 irrigation, 2 snow, 3 crop, 4 pasture,
+            5 tourism).
+          items:
+            type: integer
+            minimum: 1
+            maximum: 5
+          minItems: 5
+          maxItems: 5
+          default: [1, 2, 3, 4, 5]
+        v1_min_s_e12:
+          type: integer
+          minimum: 1
+          maximum: 5
+          default: 3
+          description: V1 minimum suitability where E <= 2.
+        v1_min_s_e3:
+          type: integer
+          minimum: 1
+          maximum: 5
+          default: 4
+          description: V1 minimum suitability where E == 3.
+        v2_min_s_e3:
+          type: integer
+          minimum: 1
+          maximum: 5
+          default: 3
+          description: V2 minimum suitability where E == 3.
+        v2_min_s_e4:
+          type: integer
+          minimum: 1
+          maximum: 5
+          default: 5
+          description: V2 minimum suitability where E == 4.
+
+    LandscapeRunInput:
+      type: object
+      description: Options of a new Landscape Program run. All fields optional.
+      properties:
+        from_stage:
+          type: [integer, "null"]
+          minimum: 0
+          maximum: 3
+          description: >-
+            Force recomputation from this stage on. Omitted (or null) reuses
+            every node whose inputs and params are unchanged; `0` recomputes
+            everything.
+        overrides:
+          type: object
+          description: >-
+            Pins a specific dataset for a group code instead of resolving the
+            freshest ready raster. The dataset must exist, be a raster, and be
+            `ready`.
+          additionalProperties:
+            type: string
+            format: uuid
+        params:
+          $ref: "#/components/schemas/LandscapeParams"
+      examples:
+        - from_stage: 0
+          overrides: { "lp-z-lcr": "3f7c1f5e-9a1a-4a54-8b2e-2d0f5c9d1a11" }
+          params: { window_size: 1024 }
+
+    LandscapeDatasetRef:
+      type: object
+      description: A dataset bound to one group slot of a node.
+      required: [group, dataset_id]
+      properties:
+        group:
+          type: string
+          description: Dataset group code.
+        dataset_id:
+          type: string
+          format: uuid
+
+    LandscapeRunNode:
+      type: object
+      description: Execution state of one graph node within a run.
+      required: [id, run_id, node_code, stage, status, fingerprint]
+      properties:
+        id:
+          type: string
+          format: uuid
+        run_id:
+          type: string
+          format: uuid
+        node_code:
+          type: string
+          description: "Node code `XY`: X = stage, Y = function within the stage."
+        stage:
+          type: integer
+        status:
+          type: string
+          enum: [pending, running, skipped, succeeded, failed]
+          description: >-
+            `skipped` means a previous run's identical result was reused.
+        fingerprint:
+          type: string
+          description: >-
+            sha256 over the node code, its resolved inputs and the
+            node-relevant params; equal fingerprints allow reuse.
+        inputs:
+          type: [array, "null"]
+          items:
+            $ref: "#/components/schemas/LandscapeDatasetRef"
+        outputs:
+          type: [array, "null"]
+          items:
+            $ref: "#/components/schemas/LandscapeDatasetRef"
+        error:
+          type: [string, "null"]
+        started_at:
+          type: [string, "null"]
+          format: date-time
+        finished_at:
+          type: [string, "null"]
+          format: date-time
+
+    LandscapeRun:
+      type: object
+      description: One execution of the Landscape Program graph.
+      required: [id, status, params, overrides, created_at]
+      properties:
+        id:
+          type: string
+          format: uuid
+        status:
+          type: string
+          enum: [queued, running, succeeded, failed]
+        from_stage:
+          type: [integer, "null"]
+        params:
+          $ref: "#/components/schemas/LandscapeParams"
+        overrides:
+          type: object
+          additionalProperties:
+            type: string
+            format: uuid
+        error:
+          type: [string, "null"]
+          description: Failure reason when status is `failed`.
+        created_at:
+          type: string
+          format: date-time
+        started_at:
+          type: [string, "null"]
+          format: date-time
+        finished_at:
+          type: [string, "null"]
+          format: date-time
+        nodes:
+          type: [array, "null"]
+          items:
+            $ref: "#/components/schemas/LandscapeRunNode"
+
+    LandscapeRunPage:
+      type: object
+      required: [data, page, page_size, total, total_pages]
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/LandscapeRun"
+        page:
+          type: integer
+        page_size:
+          type: integer
+        total:
+          type: integer
+        total_pages:
+          type: integer
+
+    LandscapeResult:
+      type: object
+      description: One computed output group of the graph and its latest layer.
+      required: [group, title, node, group_id, latest, cog_url, sld_url]
+      properties:
+        group:
+          type: string
+          description: Dataset group code, e.g. `lp-v1-conservative`.
+        title:
+          type: string
+        node:
+          type: string
+          description: Code of the graph node producing this group.
+        group_id:
+          type: string
+          format: uuid
+        latest:
+          oneOf:
+            - $ref: "#/components/schemas/DatasetSummary"
+            - type: "null"
+          description: The freshest `ready` raster of the group, if any.
+        cog_url:
+          type: [string, "null"]
+          description: "`/datasets/{id}.cog` for `latest`, or null."
+        sld_url:
+          type: [string, "null"]
+          description: >-
+            `/dataset-groups/{group_id}/sld` when the group has an SLD, else
+            null.
