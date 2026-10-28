@@ -17,7 +17,6 @@ export default function ProfilePage() {
   const { user, fetchMe } = useAuthStore()
 
   const [email, setEmail] = useState(user?.email ?? '')
-  const [iin, setIin] = useState('')
   const [profileSaving, setProfileSaving] = useState(false)
   const [profileSuccess, setProfileSuccess] = useState(false)
   const [profileError, setProfileError] = useState<string | null>(null)
@@ -37,14 +36,12 @@ export default function ProfilePage() {
     try {
       const body: Record<string, string> = {}
       if (email !== user?.email) body.email = email
-      if (iin) body.iin = iin
       if (Object.keys(body).length === 0) {
         setProfileSuccess(true)
         return
       }
       await api.patch('/auth/me', body)
       await fetchMe()
-      setIin('')
       setProfileSuccess(true)
     } catch (err: unknown) {
       const msg = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail ?? 'Ошибка сохранения'
@@ -132,20 +129,9 @@ export default function ProfilePage() {
             />
           </div>
 
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              ИИН <span className="text-gray-400 font-normal text-xs">(оставьте пустым, чтобы не менять)</span>
-            </label>
-            <input
-              type="text"
-              inputMode="numeric"
-              maxLength={12}
-              value={iin}
-              onChange={(e) => setIin(e.target.value.replace(/\D/g, '').slice(0, 12))}
-              placeholder="000000000000"
-              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm font-mono focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
-            />
-          </div>
+          <p className="text-xs text-gray-500">
+            ИИН для входа по ЭЦП привязывает администратор системы.
+          </p>
 
           {profileError && (
             <p className="text-sm text-red-600">{profileError}</p>

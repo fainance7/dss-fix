@@ -229,3 +229,28 @@ async def test_security_headers_present(client):
     assert resp.headers["x-content-type-options"] == "nosniff"
     assert resp.headers["x-frame-options"] == "DENY"
     assert "frame-ancestors 'none'" in resp.headers["content-security-policy"]
+
+
+# ── Р-12: ИИН (привязка ЭЦП) меняет только администратор ─────────────────────
+
+@pytest.mark.asyncio
+async def test_non_admin_cannot_bind_iin_to_own_account(client, expert_token):
+    headers = {"Authorization": f"Bearer {expert_token}"}
+    resp = await client.patch("/api/v1/auth/me", json={"iin": "900101300123"}, headers=headers)
+    assert resp.status_code == 403
+    me = await client.get("/api/v1/auth/me", headers=headers)
+    assert me.status_code == 200
+
+
+@pytest.mark.asyncio
+async def test_non_admin_can_still_update_email(client, expert_token):
+    headers = {"Authorization": f"Bearer {expert_token}"}
+    resp = await client.patch("/api/v1/auth/me", json={"email": "expert-new@dss.kz"}, headers=headers)
+    assert resp.status_code == 200 and resp.json()["email"] == "expert-new@dss.kz"
+
+
+@pytest.mark.asyncio
+async def test_admin_can_bind_own_iin(client, admin_token):
+    headers = {"Authorization": f"Bearer {admin_token}"}
+    resp = await client.patch("/api/v1/auth/me", json={"iin": "900101300124"}, headers=headers)
+    assert resp.status_code == 200

@@ -311,7 +311,15 @@ async def update_me(
     if body.email is not None:
         current_user.email = body.email
         changes["email"] = body.email
-    if body.iin is not None:
+    if body.iin is not None and (body.iin or None) != current_user.iin:
+        # Р-12: ИИН связывает учётную запись с ЭЦП для входа. Привязку меняет только
+        # администратор (через управление пользователями), иначе пользователь мог бы
+        # сам привязать к себе чужую или общую ЭЦП.
+        if "admin" not in {ur.role.name for ur in current_user.user_roles}:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="ИИН для входа по ЭЦП привязывает администратор",
+            )
         collision = await db.execute(
             select(User).where((User.iin == body.iin) & (User.id != current_user.id))
         )

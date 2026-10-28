@@ -30,10 +30,13 @@ async def not_authenticated_handler(request, exc: NotAuthenticated):
     next_q = urllib.parse.quote(exc.next_path or "/upload/")
     return RedirectResponse(url=f"/upload/login?next={next_q}", status_code=303)
 
-app.include_router(files.router,    prefix="/files",   tags=["Files"])
-app.include_router(dss.router,      prefix="/dss",     tags=["DSS Intake"])
-app.include_router(agromap.router,  prefix="/agromap", tags=["Agromap"])
-app.include_router(legal_entity.router, prefix="/legal", tags=["Legal Entity"])
+# Р-13: служебные маршруты интерфейса загрузки — только с действующей сессией DSS
+# (раньше были доступны без аутентификации).
+_dss_session = [Depends(require_dss_session)]
+app.include_router(files.router,    prefix="/files",   tags=["Files"], dependencies=_dss_session)
+app.include_router(dss.router,      prefix="/dss",     tags=["DSS Intake"], dependencies=_dss_session)
+app.include_router(agromap.router,  prefix="/agromap", tags=["Agromap"], dependencies=_dss_session)
+app.include_router(legal_entity.router, prefix="/legal", tags=["Legal Entity"], dependencies=_dss_session)
 app.include_router(triggers.router, prefix="/trigger", tags=["Triggers"],
                    dependencies=[Depends(verify_api_key)])
 app.include_router(dss_login_router)
