@@ -64,6 +64,14 @@ class Settings(BaseSettings):
     # Дефолт — локальный мок для офлайн-разработки; в .env задаётся реальный адрес.
     GIS_SERVICE_URL: str = "http://localhost:8100"
     GIS_SERVICE_TIMEOUT: float = 30.0
+    # Ключ X-API-Key для GIS-сервиса (аудит C-2): GIS отклоняет запросы без ключа.
+    # Должен совпадать с API_KEY в окружении GIS. В production обязателен.
+    GIS_API_KEY: str = ""
+
+    @property
+    def gis_headers(self) -> dict[str, str]:
+        """Заголовки для всех запросов backend → GIS."""
+        return {"X-API-Key": self.GIS_API_KEY} if self.GIS_API_KEY else {}
 
     # TiTiler для растровых тайлов (COG). Backend проксирует /api/v1/gis/raster/* сюда.
     # COG_DIR — общий том cog_data (backend заливает, titiler читает).
@@ -122,6 +130,13 @@ class Settings(BaseSettings):
             # H-1: ЭЦП в режиме legacy — ИИН извлекается из недоверенного содержимого
             # CMS без криптопроверки подписи. В проде только ncanode: NCANode проверяет
             # подпись, цепочку до корня НУЦ РК и отзыв (OCSP/CRL). Падаем на старте.
+            # C-2: GIS требует X-API-Key; без ключа backend получит 401 на всех
+            # запросах к геоданным — либо GIS оставят открытым. Падаем на старте.
+            if len(self.GIS_API_KEY) < 32:
+                raise ValueError(
+                    "GIS_API_KEY не задан или короче 32 символов в production. "
+                    "Задайте в .env то же значение, что API_KEY у GIS-сервиса."
+                )
             if self.ECP_VERIFY_MODE != "ncanode":
                 raise ValueError(
                     "ECP_VERIFY_MODE=legacy запрещён в production. Задайте "

@@ -175,6 +175,7 @@ def _get_client() -> httpx.AsyncClient:
     if _client is None:
         _client = httpx.AsyncClient(
             base_url=settings.GIS_SERVICE_URL.rstrip("/"),
+            headers=settings.gis_headers,
             timeout=httpx.Timeout(settings.GIS_SERVICE_TIMEOUT, read=120.0),
         )
     return _client

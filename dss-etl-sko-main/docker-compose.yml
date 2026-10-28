@@ -9,11 +9,11 @@ x-airflow-common: &airflow-common
     - geo/.env
   environment:
     AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres/${AIRFLOW_DB}
-    AIRFLOW__CELERY__BROKER_URL: redis://:${REDIS_PASSWORD}@redis:6379/0
+    AIRFLOW__CELERY__BROKER_URL: redis://:${REDIS_PASSWORD:?REDIS_PASSWORD must be set in .env (audit L-3/M-3)}@redis:6379/0
     AIRFLOW__CELERY__RESULT_BACKEND: db+postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres/${AIRFLOW_DB}
     AIRFLOW__CORE__EXECUTOR: CeleryExecutor
-    AIRFLOW__CORE__FERNET_KEY: ${AIRFLOW__CORE__FERNET_KEY}
-    AIRFLOW__WEBSERVER__SECRET_KEY: ${AIRFLOW__WEBSERVER__SECRET_KEY}
+    AIRFLOW__CORE__FERNET_KEY: ${AIRFLOW__CORE__FERNET_KEY:?AIRFLOW__CORE__FERNET_KEY must be set in .env (audit L-3/M-3)}
+    AIRFLOW__WEBSERVER__SECRET_KEY: ${AIRFLOW__WEBSERVER__SECRET_KEY:?AIRFLOW__WEBSERVER__SECRET_KEY must be set in .env (audit L-3/M-3)}
     AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION: 'true'
     AIRFLOW__API__AUTH_BACKENDS: airflow.api.auth.backend.basic_auth
   volumes:
@@ -49,9 +49,9 @@ services:
   redis:
     image: redis:7-alpine
     container_name: dssetl-redis
-    command: redis-server --requirepass ${REDIS_PASSWORD}
+    command: redis-server --requirepass ${REDIS_PASSWORD:?REDIS_PASSWORD must be set in .env (audit L-3/M-3)}
     healthcheck:
-      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD}", "ping"]
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD:?REDIS_PASSWORD must be set in .env (audit L-3/M-3)}", "ping"]
       interval: 10s
       retries: 5
     restart: unless-stopped
@@ -59,7 +59,7 @@ services:
   airflow-init:
     <<: *airflow-common
     container_name: dssetl-airflow-init
-    command: bash -c "airflow db migrate && airflow users create --username admin --password ${AIRFLOW_ADMIN_PASSWORD} --firstname Admin --lastname Admin --role Admin --email admin@dwh.kz"
+    command: bash -c "airflow db migrate && airflow users create --username admin --password ${AIRFLOW_ADMIN_PASSWORD:?AIRFLOW_ADMIN_PASSWORD must be set in .env (audit L-3/M-3)} --firstname Admin --lastname Admin --role Admin --email admin@dwh.kz"
     restart: "no"
 
   airflow-webserver:

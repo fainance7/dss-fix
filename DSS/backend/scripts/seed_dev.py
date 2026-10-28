@@ -20,7 +20,7 @@ from passlib.context import CryptContext
 import os
 DATABASE_URL = os.environ.get(
     "DATABASE_URL",
-    f"postgresql://dss_user:{os.environ.get('POSTGRES_PASSWORD', 'dss_local_password')}@{os.environ.get('POSTGRES_HOST', 'postgres')}:{os.environ.get('POSTGRES_PORT', '5432')}/{os.environ.get('POSTGRES_DB', 'dss_db')}"
+    f"postgresql://dss_user:{os.environ['POSTGRES_PASSWORD']}@{os.environ.get('POSTGRES_HOST', 'postgres')}:{os.environ.get('POSTGRES_PORT', '5432')}/{os.environ.get('POSTGRES_DB', 'dss_db')}"
 )
 ADMIN_USER_ID = "36f02ac7-c768-4de8-93ff-19c163a0c0a5"
 
@@ -67,7 +67,10 @@ TEST_USERS = [
     {"username": "akim_aiyr",      "email": "akim_aiyr@dss.kz",      "full_name": "Аким Айыртауского р-на",       "role": "akim_ray", "district": "SKO-AIYR"},
     {"username": "akim_zhumb",     "email": "akim_zhumb@dss.kz",     "full_name": "Аким р-на им. М. Жумабаева",   "role": "akim_ray", "district": "SKO-ZHUMB"},
 ]
-TEST_PASSWORD = "Test2026"
+# Аудит L-2: тестовый пароль не хранится в коде. Берётся из SEED_TEST_PASSWORD,
+# иначе генерируется случайный на каждый запуск (печатается в конце сида).
+import secrets as _secrets
+TEST_PASSWORD = os.environ.get("SEED_TEST_PASSWORD") or _secrets.token_urlsafe(12)
 
 # ---------------------------------------------------------------------------
 # Базовые значения ВРП СКО по годам (млн тг, вся область)
@@ -421,6 +424,9 @@ async def seed(conn: asyncpg.Connection) -> None:
 
 
 async def main() -> None:
+    # Аудит L-2: сид тестовых пользователей запрещён на production-окружении.
+    if os.environ.get("ENVIRONMENT") == "production":
+        raise SystemExit("seed_dev.py запрещён при ENVIRONMENT=production")
     print("🚀 DSS Dev Seed — СКО")
     print("=" * 40)
     conn = await asyncpg.connect(DATABASE_URL)

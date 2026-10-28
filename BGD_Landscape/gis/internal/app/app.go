@@ -127,6 +127,7 @@ func (a *App) Handler() stdhttp.Handler {
 		Landscape:     transporthttp.NewLandscapeHandler(a.landscape, validate),
 		OpenAPISpec:   api.Spec,
 		APIKey:        a.Cfg.HTTP.APIKey,
+		AuthDisabled:  a.Cfg.HTTP.AuthDisabled,
 	})
 }
 

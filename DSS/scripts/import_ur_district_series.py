@@ -102,9 +102,9 @@ SERIES: list[dict] = [
 
 
 def dsn() -> str:
-    return os.environ.get(
-        "DSS_DB_DSN",
-        "host=127.0.0.1 port=5433 dbname=dss_db user=dss_user password=dss_password",
+    return os.environ.get("DSS_DB_DSN") or (
+        "host=127.0.0.1 port=5433 dbname=dss_db user=dss_user password="
+        + os.environ["POSTGRES_PASSWORD"]  # аудит H-5: без пароля по умолчанию
     )
 
 

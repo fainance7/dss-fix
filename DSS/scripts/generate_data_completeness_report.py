@@ -45,6 +45,8 @@ DEFAULT_START = 2000   # начало для показателей без да�
 
 # Каталог геоданных берётся вживую из GIS-сервиса dssgis.dwh.kz (не из dss_db).
 GIS_SERVICE_URL = os.environ.get("GIS_SERVICE_URL", "https://dssgis.dwh.kz").rstrip("/")
+# GIS требует X-API-Key (аудит C-2); ключ отправляется только на GIS_SERVICE_URL.
+GIS_API_KEY = os.environ.get("GIS_API_KEY", "")
 
 
 def get_connection():
@@ -52,7 +54,7 @@ def get_connection():
         host=os.environ.get("POSTGRES_HOST", "localhost"),
         port=int(os.environ.get("POSTGRES_PORT", "5433")),
         user=os.environ.get("POSTGRES_USER", "dss_user"),
-        password=os.environ.get("POSTGRES_PASSWORD", "dss_local_password"),
+        password=os.environ["POSTGRES_PASSWORD"],
         dbname=os.environ.get("POSTGRES_DB", "dss_db"),
     )
 
@@ -88,7 +90,10 @@ ORDER BY d.name, i.sort_order, i.name;
 
 
 def _http_get_json(url: str, timeout: int = 15):
-    req = urllib.request.Request(url, headers={"Accept": "application/json"})
+    headers = {"Accept": "application/json"}
+    if GIS_API_KEY and url.startswith(GIS_SERVICE_URL + "/"):
+        headers["X-API-Key"] = GIS_API_KEY
+    req = urllib.request.Request(url, headers=headers)
     with urllib.request.urlopen(req, timeout=timeout) as resp:
         return json.loads(resp.read().decode("utf-8"))
 

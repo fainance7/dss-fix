@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"os"
 
 	"gis/internal/config"
 	"gis/migrations"
@@ -46,6 +47,11 @@ var migrateCmd = &cobra.Command{
 
 		command := args[0]
 		if command == "fresh" {
+			// Destructive: drops the whole schema. Requires an explicit opt-in so a
+			// mistyped command or wrong DB_URL cannot wipe production data.
+			if os.Getenv("GIS_ALLOW_MIGRATE_FRESH") != "true" {
+				return fmt.Errorf("migrate fresh drops schema %q: set GIS_ALLOW_MIGRATE_FRESH=true to confirm (never in production)", cfg.DB.Schema)
+			}
 			return migrateFresh(cmd.Context(), db, cfg.DB.Schema)
 		}
 		return goose.RunContext(cmd.Context(), command, db, ".", args[1:]...)

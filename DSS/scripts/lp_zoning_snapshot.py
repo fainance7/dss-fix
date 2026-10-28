@@ -30,6 +30,8 @@ from rasterio.windows import Window, transform as window_transform
 
 COG_DIR = os.environ.get("COG_DIR", "/data/cogs")
 GIS_URL = os.environ.get("GIS_URL", "http://172.17.0.1:8080").rstrip("/")
+# GIS требует X-API-Key (аудит C-2).
+GIS_API_KEY = os.environ.get("GIS_API_KEY", "")
 DISTRICTS = os.environ.get("DISTRICTS", "/districts.geojson")
 VERSION = os.environ.get("ZONING_VERSION", "fullres1")  # = landscape_link._ZONING_VERSION
 VARIANTS = {
@@ -41,7 +43,8 @@ BLOCK = 512
 
 
 def get(path: str) -> bytes:
-    with urllib.request.urlopen(GIS_URL + path, timeout=60) as r:
+    req = urllib.request.Request(GIS_URL + path, headers={"X-API-Key": GIS_API_KEY} if GIS_API_KEY else {})
+    with urllib.request.urlopen(req, timeout=60) as r:
         return r.read()
 
 

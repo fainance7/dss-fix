@@ -34,12 +34,16 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
+import shutil
 import subprocess
 import urllib.parse
 import urllib.request
 from pathlib import Path
 
-GIS_BASE = "https://dssgis.dwh.kz"
+GIS_BASE = os.environ.get("GIS_SERVICE_URL", "https://dssgis.dwh.kz").rstrip("/")
+# GIS требует X-API-Key (аудит C-2).
+GIS_HEADERS = {"X-API-Key": os.environ["GIS_API_KEY"]} if os.environ.get("GIS_API_KEY") else {}
 TITILER_CONTAINER = "dss-titiler"
 BACKEND_CONTAINER = "dss-backend"
 COG_DIR = "/data/cogs"
@@ -54,7 +58,8 @@ DIRECTIONAL_CLASSES = (1, 2, 3, 4, 5)
 
 
 def gis_get(path: str) -> dict | list:
-    with urllib.request.urlopen(f"{GIS_BASE}{path}", timeout=60) as r:
+    req = urllib.request.Request(f"{GIS_BASE}{path}", headers=GIS_HEADERS)
+    with urllib.request.urlopen(req, timeout=60) as r:
         return json.load(r)
 
 
@@ -80,7 +85,9 @@ def ensure_local_cog(dataset_id: str, tmp: Path) -> str:
     path = tmp / local_name
     if not path.exists():
         print(f"  скачивание растра {dataset_id}…")
-        urllib.request.urlretrieve(f"{GIS_BASE}/datasets/{dataset_id}.cog", path)
+        req = urllib.request.Request(f"{GIS_BASE}/datasets/{dataset_id}.cog", headers=GIS_HEADERS)
+        with urllib.request.urlopen(req, timeout=600) as r, open(path, "wb") as fh:
+            shutil.copyfileobj(r, fh)
     # Том смонтирован в titiler только на чтение, пишем через backend.
     subprocess.run(
         ["docker", "cp", str(path), f"{BACKEND_CONTAINER}:{COG_DIR}/{local_name}"],
@@ -121,9 +128,9 @@ def district_areas_ha() -> dict[str, float]:
 
     import psycopg2
 
-    dsn = os.environ.get(
-        "DSS_DB_DSN",
-        "host=127.0.0.1 port=5433 dbname=dss_db user=dss_user password=dss_password",
+    dsn = os.environ.get("DSS_DB_DSN") or (
+        "host=127.0.0.1 port=5433 dbname=dss_db user=dss_user password="
+        + os.environ["POSTGRES_PASSWORD"]  # аудит H-5: без пароля по умолчанию
     )
     with psycopg2.connect(dsn) as conn, conn.cursor() as cur:
         cur.execute(

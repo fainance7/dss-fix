@@ -55,7 +55,7 @@ def fetch_from_db() -> tuple[list[dict], list[dict], list[dict]]:
         host=os.environ.get("POSTGRES_HOST", "localhost"),
         port=int(os.environ.get("POSTGRES_PORT", "5433")),
         user=os.environ.get("POSTGRES_USER", "dss_user"),
-        password=os.environ.get("POSTGRES_PASSWORD", "dss_local_password"),
+        password=os.environ["POSTGRES_PASSWORD"],
         dbname=os.environ.get("POSTGRES_DB", "dss_db"),
     )
     try:

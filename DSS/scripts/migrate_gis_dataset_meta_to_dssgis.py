@@ -33,7 +33,8 @@ async def main() -> None:
 
     print(f"К переносу: {len(rows)} строк. GIS={base}")
     ok, failed = 0, 0
-    async with httpx.AsyncClient(base_url=base, timeout=settings.GIS_SERVICE_TIMEOUT) as client:
+    async with httpx.AsyncClient(base_url=base, timeout=settings.GIS_SERVICE_TIMEOUT,
+                                 headers=settings.gis_headers) as client:
         for gis_dataset_id, description in rows:
             try:
                 resp = await client.patch(

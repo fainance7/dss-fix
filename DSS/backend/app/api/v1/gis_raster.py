@@ -50,6 +50,7 @@ def _get_gis_client() -> httpx.AsyncClient:
     if _gis_client_inst is None:
         _gis_client_inst = httpx.AsyncClient(
             base_url=settings.GIS_SERVICE_URL.rstrip("/"),
+            headers=settings.gis_headers,
             timeout=httpx.Timeout(30.0, read=600.0),
         )
     return _gis_client_inst

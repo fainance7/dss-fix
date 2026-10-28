@@ -39,6 +39,7 @@ services:
       REPORTS_PGDATABASE: ${REPORTS_PGDATABASE:-reports_db}
       # Подсистема геоданных (смежная команда). Реальный сервис dssgis.dwh.kz.
       GIS_SERVICE_URL: ${GIS_SERVICE_URL:-https://dssgis.dwh.kz}
+      GIS_API_KEY: ${GIS_API_KEY:?GIS_API_KEY must be set in .env (audit C-2)}
       # AI-микросервис: бэкенд проксирует /api/v1/ai/* на ai-service с серверным
       # X-AI-Key. AI_SECRET_KEY должен совпадать с тем, что у ai-service.
       AI_SERVICE_URL: ${AI_SERVICE_URL:-http://dss-ai-service:8001}

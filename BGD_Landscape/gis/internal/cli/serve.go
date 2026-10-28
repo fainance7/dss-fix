@@ -19,6 +19,13 @@ var serveCmd = &cobra.Command{
 		}
 		defer application.Close()
 
+		if err := application.Cfg.HTTP.ValidateAuth(); err != nil {
+			return err
+		}
+		if application.Cfg.HTTP.AuthDisabled {
+			application.Log.Warn("API key auth is DISABLED (API_AUTH_DISABLED=true) — local development only")
+		}
+
 		return application.Server().Run(ctx)
 	},
 }

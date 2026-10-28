@@ -22,9 +22,11 @@ type RouterDeps struct {
 	// Landscape serves the /landscape routes.
 	Landscape   *LandscapeHandler
 	OpenAPISpec []byte
-	// APIKey, when non-empty, is required in the X-API-Key header on all
-	// routes except /healthz and /readyz. Empty disables auth (dev only).
+	// APIKey is required in the X-API-Key header on all routes except
+	// /healthz, /readyz, /docs and /openapi.yaml.
 	APIKey string
+	// AuthDisabled skips the API-key check (local development only).
+	AuthDisabled bool
 }
 
 // NewRouter builds the application's HTTP handler with middleware and routes.
@@ -44,8 +46,10 @@ func NewRouter(deps RouterDeps) http.Handler {
 	r.Get("/openapi.yaml", deps.openAPISpec)
 	r.Get("/docs", docsUI)
 
-	// Domain routes — require X-API-Key when APIKey is configured.
-	if deps.APIKey != "" {
+	// Domain routes — always require X-API-Key unless auth was explicitly
+	// disabled for local development. An empty key with auth enabled rejects
+	// every request (fail closed) rather than leaving the API open.
+	if !deps.AuthDisabled {
 		r.Use(requireAPIKey(deps.APIKey))
 	}
 
@@ -64,7 +68,7 @@ func requireAPIKey(expected string) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			got := r.Header.Get("X-API-Key")
-			if got == "" || subtle.ConstantTimeCompare([]byte(got), []byte(expected)) != 1 {
+			if expected == "" || got == "" || subtle.ConstantTimeCompare([]byte(got), []byte(expected)) != 1 {
 				httputil.WriteError(w, http.StatusUnauthorized, "missing or invalid X-API-Key")
 				return
 			}

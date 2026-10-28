@@ -46,13 +46,15 @@ app = FastAPI(
 
 app.add_middleware(
     CORSMiddleware,
+    # localhost-origins разрешены только вне production (повторный аудит, M-1).
     allow_origins=[
+        "https://dss.dwh.kz",
+        "https://dssapi.dwh.kz",
+    ] + ([] if _IS_PROD else [
         "http://localhost:3000",
         "http://localhost:3010",
         "http://localhost:8000",
-        "https://dss.dwh.kz",
-        "https://dssapi.dwh.kz",
-    ],
+    ]),
     allow_credentials=True,
     # M-1: explicit method + header lists instead of wildcards. Wildcards with
     # allow_credentials=True can be abused if an origin is misconfigured; an
