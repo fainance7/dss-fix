@@ -314,6 +314,10 @@ async def api_taldau_run(request: Request):
     year_from, year_to = _years(data.get("year_from", 2010), data.get("year_to", datetime.now().year))
     if not isinstance(index_ids, list) or len(index_ids) > 200:
         raise HTTPException(400, "index_ids: список не более чем из 200 показателей")
+    _names = data.get("indicator_names", {})
+    if not isinstance(_names, dict) or len(_names) > 200 or not all(
+            isinstance(v, str) and len(v) <= 300 for v in _names.values()):
+        raise HTTPException(400, "indicator_names: не более 200 названий длиной до 300 символов")
     split_by_kato   = bool(data.get("split_by_kato", False))
     kato_region_code = str(data.get("kato_region_code", "590000000"))  # принимается, см. docstring
     indicator_names = data.get("indicator_names", {})  # {id: name} - для показателей из

@@ -30,7 +30,7 @@ import json
 import requests
 import pandas as pd
 from datetime import datetime, timedelta
-from sqlalchemy import create_engine, text
+from sqlalchemy import create_engine, text, bindparam
 from airflow import DAG
 from airflow.operators.python import PythonOperator
 from airflow.operators.trigger_dagrun import TriggerDagRunOperator
@@ -232,9 +232,13 @@ def fetch_taldau(**context):
     errors = []
     _ind_names = [n for _, n in _resolve_indicators(conf)]
     if _ind_names:
-        _names_sql = ",".join(f"'{n}'" for n in _ind_names)
+        # ПТ-32: имена показателей приходят из параметров запуска — только связанные параметры
         with engine.begin() as _conn:
-            _conn.execute(text(f"DELETE FROM raw_taldau WHERE indicator_name IN ({_names_sql})"))
+            _conn.execute(
+                text("DELETE FROM raw_taldau WHERE indicator_name IN :names")
+                .bindparams(bindparam("names", expanding=True)),
+                {"names": list(_ind_names)},
+            )
         print(f"[CLEANUP] raw_taldau: удалены старые строки для {len(_ind_names)} показателей")
 
     # id районов у Talдау — своя внутренняя нумерация, НЕ коды КАТО.
@@ -473,9 +477,12 @@ def transform_taldau(**context):
 
     _names_to_del = df_out["indicator_name"].unique().tolist()
     if _names_to_del:
-        _del_sql = ",".join(f"'{n}'" for n in _names_to_del)
         with engine.begin() as _conn:
-            _conn.execute(text(f"DELETE FROM transformed_taldau WHERE indicator_name IN ({_del_sql})"))
+            _conn.execute(
+                text("DELETE FROM transformed_taldau WHERE indicator_name IN :names")
+                .bindparams(bindparam("names", expanding=True)),
+                {"names": list(_names_to_del)},
+            )
         print(f"[CLEANUP] transformed_taldau: удалены старые строки для {len(_names_to_del)} показателей")
     df_out.to_sql(
         "transformed_taldau", engine, if_exists="append", index=False
