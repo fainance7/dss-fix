@@ -9,6 +9,7 @@ from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.templating import Jinja2Templates
 
 from routers.upload_parser import upload_file, detect_structure, upload_zip
+from security import read_upload, safe_filename, log_event
 
 router = APIRouter(prefix="/upload", tags=["Upload Interface"])
 templates = Jinja2Templates(directory="templates")
@@ -25,6 +26,18 @@ ARTIFACTS_DIR = os.environ.get("ARTIFACTS_DIR", "/app/artifacts")
 DB_CONN = os.environ.get("DB_CONN") or os.environ.get("REPORTS_DB_DSN")
 if not DB_CONN:
     raise RuntimeError("DB_CONN or REPORTS_DB_DSN must be set (audit H-5: no insecure default)")
+
+
+def _years(year_from, year_to) -> tuple[int, int]:
+    """ПТ-29: период загрузки ограничен 2000 — текущий год + 1."""
+    try:
+        yf, yt = int(year_from), int(year_to)
+    except (TypeError, ValueError):
+        raise HTTPException(400, "Год должен быть числом")
+    hi = datetime.now().year + 1
+    if not (2000 <= yf <= yt <= hi):
+        raise HTTPException(400, f"Период должен быть в пределах 2000–{hi}, начало не позже конца")
+    return yf, yt
 
 
 def trigger_dag(dag_id: str, conf: dict = None) -> dict:
@@ -149,7 +162,7 @@ def extract_error_message(log_text: str) -> str | None:
 
 
 @router.get("/", response_class=HTMLResponse)
-async def upload_index(request: Request):
+def upload_index(request: Request):
     """Главная страница Upload Interface."""
     history = []
     for dag_id in ["dag_extract_weather", "dag_extract_taldau",
@@ -178,40 +191,41 @@ async def upload_index(request: Request):
 
 
 @router.get("/manual", response_class=HTMLResponse)
-async def upload_manual(request: Request):
+def upload_manual(request: Request):
     """Страница ручной загрузки файлов."""
     return templates.TemplateResponse(request, "upload/manual.html", {})
 
 
 @router.get("/taldau", response_class=HTMLResponse)
-async def upload_taldau(request: Request):
+def upload_taldau(request: Request):
     """Страница запуска Taldau + Гос. API."""
     return templates.TemplateResponse(request, "upload/taldau.html", {})
 
 
 @router.get("/climate", response_class=HTMLResponse)
-async def upload_climate(request: Request):
+def upload_climate(request: Request):
     """Страница запуска Climate API (Open-Meteo)."""
     return templates.TemplateResponse(request, "upload/climate.html", {})
 
 
 @router.get("/files", response_class=HTMLResponse)
-async def upload_files(request: Request):
+def upload_files(request: Request):
     """Страница со списком готовых DSS Excel файлов."""
     return templates.TemplateResponse(request, "upload/files.html", {})
 
 
 @router.get("/agromap", response_class=HTMLResponse)
-async def agromap_page(request: Request):
+def agromap_page(request: Request):
     return templates.TemplateResponse(request, "upload/agromap.html", {})
 
 @router.get("/legal", response_class=HTMLResponse)
-async def legal_page(request: Request):
+def legal_page(request: Request):
     return templates.TemplateResponse(request, "upload/legal.html", {})
 
 
 @router.post("/api/manual/upload")
-async def api_manual_upload(
+def api_manual_upload(
+    request: Request,
     file: UploadFile = File(...),
     direction_code: str = Form("economy"),
     indicator_name: str = Form(""),
@@ -243,15 +257,17 @@ async def api_manual_upload(
     # .docx, но бэкенд тут отвергал его до того, как файл попадал в
     # universal_detector, который .docx/.doc/.pdf поддерживает).
     allowed = {"xlsx", "xls", "csv", "doc", "docx", "pdf"}
-    ext = file.filename.rsplit(".", 1)[-1].lower() if "." in file.filename else ""
+    # ПТ-21/ПТ-22: имя файла без каталогов и HTML-символов
+    filename = safe_filename(file.filename)
+    ext = filename.rsplit(".", 1)[-1].lower() if "." in filename else ""
     if ext not in allowed:
         raise HTTPException(400, f"Недопустимый формат. Разрешены: {', '.join(sorted(allowed))}")
 
     os.makedirs(ARTIFACTS_DIR, exist_ok=True)
     ts       = datetime.now().strftime("%Y%m%d_%H%M%S")
-    savepath = os.path.join(ARTIFACTS_DIR, f"{ts}_{file.filename}")
+    savepath = os.path.join(ARTIFACTS_DIR, f"{ts}_{filename}")
 
-    content = await file.read()
+    content = read_upload(file)  # ПТ-24: ограничение размера
     with open(savepath, "wb") as f:
         f.write(content)
 
@@ -260,6 +276,7 @@ async def api_manual_upload(
     # DAG выполняется в airflow-worker, поэтому путь нужно пересчитать.
     worker_path = savepath.replace(ARTIFACTS_DIR, "/opt/airflow/artifacts")
 
+    log_event("upload", request, user=getattr(request.state, "user", "-"), file=filename, bytes=len(content))
     run = trigger_dag("dag_auto_convert", conf={
         "source_file":             worker_path,
         "fallback_direction_code": direction_code,
@@ -294,8 +311,9 @@ async def api_taldau_run(request: Request):
     """
     data            = await request.json()
     index_ids       = data.get("index_ids", [])
-    year_from       = int(data.get("year_from", 2010))
-    year_to         = int(data.get("year_to", datetime.now().year))
+    year_from, year_to = _years(data.get("year_from", 2010), data.get("year_to", datetime.now().year))
+    if not isinstance(index_ids, list) or len(index_ids) > 200:
+        raise HTTPException(400, "index_ids: список не более чем из 200 показателей")
     split_by_kato   = bool(data.get("split_by_kato", False))
     kato_region_code = str(data.get("kato_region_code", "590000000"))  # принимается, см. docstring
     indicator_names = data.get("indicator_names", {})  # {id: name} - для показателей из
@@ -321,7 +339,7 @@ async def api_taldau_run(request: Request):
 
 
 @router.get("/api/taldau-search")
-async def api_taldau_search(q: str = ""):
+def api_taldau_search(q: str = ""):
     """
     Живой поиск по ПОЛНОМУ каталогу показателей Talдау (не только по 7
     строкам в taldau_indicators_catalog) — через недокументированный
@@ -383,7 +401,7 @@ async def api_taldau_search(q: str = ""):
 
 
 @router.get("/api/taldau-indicators")
-async def api_taldau_indicators():
+def api_taldau_indicators():
     """
     Возвращает список показателей Talдау из taldau_indicators_catalog —
     реализует Задачу 1.4 плана (динамический селектор) + доработку
@@ -425,7 +443,9 @@ async def api_taldau_indicators():
         cur.close()
         conn.close()
     except Exception as e:
-        raise HTTPException(500, f"Не удалось прочитать каталог показателей Talдау: {e}")
+        log_event("server_error", None, where="taldau_indicators", error=type(e).__name__)
+        import logging; logging.getLogger("etl").exception("taldau catalog read failed")
+        raise HTTPException(500, "Не удалось прочитать каталог показателей Talдау; подробности — в журнале сервера")
 
     indicators = [
         {
@@ -455,9 +475,10 @@ async def api_taldau_indicators():
 async def api_climate_run(request: Request):
     """Триггерит dag_extract_weather."""
     data      = await request.json()
-    year_from = int(data.get("year_from", 2020))
-    year_to   = int(data.get("year_to", datetime.now().year))
+    year_from, year_to = _years(data.get("year_from", 2020), data.get("year_to", datetime.now().year))
     districts = data.get("districts", ["all"])
+    if not isinstance(districts, list) or len(districts) > 50 or not all(isinstance(d, str) and len(d) <= 64 for d in districts):
+        raise HTTPException(400, "districts: список не более чем из 50 районов")
 
     run = trigger_dag("dag_extract_weather", conf={
         "year_from": year_from,
@@ -471,7 +492,7 @@ async def api_climate_run(request: Request):
 
 
 @router.get("/api/dag-status/{dag_id}/{dag_run_id}")
-async def api_dag_status(dag_id: str, dag_run_id: str):
+def api_dag_status(dag_id: str, dag_run_id: str):
     """Возвращает статус конкретного DAG Run."""
     status = get_dag_run_status(dag_id, dag_run_id)
     return JSONResponse({"success": True, "state": status.get("state", "unknown"),
@@ -480,7 +501,7 @@ async def api_dag_status(dag_id: str, dag_run_id: str):
 
 
 @router.get("/api/history")
-async def api_history():
+def api_history():
     """Возвращает историю последних запусков всех DAG-ов."""
     history = []
     for dag_id in ["dag_extract_weather", "dag_extract_taldau",
@@ -499,7 +520,7 @@ async def api_history():
 
 
 @router.get("/api/failed-logs")
-async def api_failed_logs(limit: int = 20):
+def api_failed_logs(limit: int = 20):
     """
     Реализует Задачу 1.5 плана: счётчик "С ошибками" на дашборде — кликабельная
     ссылка, открывающая таблицу человекочитаемых причин падения по каждому
@@ -603,17 +624,17 @@ async def api_failed_logs(limit: int = 20):
 # ════════════════════════════════════════════════════════════════════════════
 
 @router.post("/api/detect")
-async def api_proxy_detect(file: UploadFile = File(...)):
+def api_proxy_detect(file: UploadFile = File(...)):
     """
     Вызывает detect_structure() из upload_parser.py напрямую (в одном
     процессе) — реализует Задачу 1.3 (Data Preview) без необходимости
     передавать API-ключ из браузера и без сетевого self-вызова.
     """
-    return await detect_structure(file=file)
+    return detect_structure(file=file)
 
 
 @router.post("/api/file")
-async def api_proxy_file(
+def api_proxy_file(
     file:           UploadFile = File(...),
     indicator_name: str = Form(""),
     direction:      str = Form("economy"),
@@ -627,7 +648,7 @@ async def api_proxy_file(
     сгенерировать DSS Excel» в модальном окне превью, на том же файле,
     что уже был показан через /api/detect.
     """
-    return await upload_file(
+    return upload_file(
         file=file,
         indicator_name=indicator_name or None,
         direction=direction,
@@ -638,7 +659,7 @@ async def api_proxy_file(
 
 
 @router.post("/api/zip")
-async def api_proxy_zip(
+def api_proxy_zip(
     file:      UploadFile = File(...),
     direction: str = Form("economy"),
     mode:      str = Form("dag"),
@@ -650,4 +671,4 @@ async def api_proxy_zip(
     сюда, не на /upload/api/manual/upload (тот эндпоинт принимает только
     xlsx/xls/csv/doc/docx/pdf по отдельности, не архивы).
     """
-    return await upload_zip(file=file, direction=direction, mode=mode)
+    return upload_zip(file=file, direction=direction, mode=mode)

@@ -28,6 +28,7 @@ PDF И DOCX: extract_sheets() из etl/document_adapters.py превращает
 Excel — после этого PDF/DOCX обрабатываются universal_detector.py абсолютно
 так же, как .xlsx, без отдельной ветки логики для распознавания структуры.
 """
+import logging
 import io
 import json
 import os
@@ -66,6 +67,7 @@ sys.path.insert(0, str(ETL_DIR))
 
 from universal_detector import IndicatorCatalog, convert_sheets  # noqa: E402
 from document_adapters import extract_sheets  # noqa: E402
+from security import read_upload, parse_slot, safe_filename, check_lines, MAX_UPLOAD_MB, MAX_ZIP_UPLOAD_MB  # noqa: E402
 
 _CATALOG_PATH = ETL_DIR / "indicator_catalog.csv"
 _ALIASES_PATH = ETL_DIR / "indicator_aliases.csv"
@@ -214,7 +216,7 @@ def _apply_fallback(rows: list[dict], fallback_direction: str,
 # ════════════════════════════════════════════════════════════════════════════
 
 @router.post("/file")
-async def upload_file(
+def upload_file(
     file:           UploadFile = File(...),
     indicator_name: Optional[str] = Form(None),
     direction:      str            = Form("economy"),
@@ -250,8 +252,15 @@ async def upload_file(
     if direction not in VALID_DIRECTIONS:
         raise HTTPException(400, f"direction должен быть одним из: {sorted(VALID_DIRECTIONS)}")
 
-    content = await file.read()
-    filename = file.filename or "upload.xlsx"
+    # ПТ-24: размер и длина строк проверяются до разбора; разбор — в пуле потоков,
+    # не более ETL_PARSE_CONCURRENCY одновременно
+    content = read_upload(file)
+    filename = safe_filename(file.filename, "upload.xlsx")
+    with parse_slot():
+        return _upload_file_impl(content, filename, indicator_name, direction, unit, sheet_name, mode)
+
+
+def _upload_file_impl(content, filename, indicator_name, direction, unit, sheet_name, mode):
     ext = filename.rsplit(".", 1)[-1].lower() if "." in filename else ""
 
     if ext not in ALLOWED_EXTENSIONS:
@@ -306,7 +315,8 @@ async def upload_file(
         try:
             dss_bytes = _build_dss_bytes(deduped)
         except Exception as e:
-            raise HTTPException(500, f"Ошибка сборки Excel: {e}")
+            logging.getLogger("etl").exception("DSS excel build failed")
+            raise HTTPException(500, "Ошибка сборки Excel; подробности — в журнале сервера") from e
 
         ts = datetime.now().strftime("%Y%m%d_%H%M")
         base = re.sub(r"\.(xlsx?|xls)$", "", filename, flags=re.IGNORECASE)
@@ -332,7 +342,8 @@ async def upload_file(
     try:
         _save_to_raw_historical(deduped, filename)
     except Exception as e:
-        raise HTTPException(500, f"Ошибка записи в БД: {e}")
+        logging.getLogger("etl").exception("raw_historical write failed")
+        raise HTTPException(500, "Ошибка записи в БД; подробности — в журнале сервера") from e
 
     try:
         run = _trigger_dag("dag_extract_historical")
@@ -394,7 +405,7 @@ def _cat_preview(cat_rows: list, indicator: str, limit: int = 5) -> list:
 
 
 @router.post("/detect")
-async def detect_structure(file: UploadFile = File(...)):
+def detect_structure(file: UploadFile = File(...)):
     """
     Показывает структуру файла и предпросмотр данных без сохранения.
     Используй перед /file, чтобы убедиться, что universal_detector
@@ -406,8 +417,13 @@ async def detect_structure(file: UploadFile = File(...)):
     (find_blocks из universal_detector), что и реальная обработка, поэтому
     превью гарантированно совпадает с тем, что попадёт в raw_historical.
     """
-    content = await file.read()
-    filename = file.filename or "upload.xlsx"
+    content = read_upload(file)
+    filename = safe_filename(file.filename, "upload.xlsx")
+    with parse_slot():
+        return _detect_impl(content, filename)
+
+
+def _detect_impl(content, filename):
     ext = filename.rsplit(".", 1)[-1].lower() if "." in filename else ""
 
     if ext not in ALLOWED_EXTENSIONS:
@@ -537,7 +553,7 @@ async def detect_structure(file: UploadFile = File(...)):
     )
 
     return {
-        "filename":                file.filename,
+        "filename":                filename,
         "total_sheets":            len(xl),
         "total_blocks":            total_blocks,
         "total_unmatched":         total_unmatched,
@@ -557,11 +573,11 @@ async def detect_structure(file: UploadFile = File(...)):
 # ДИСКА при распаковке (памяти это не касается напрямую, но огромное
 # количество файлов также means много итераций конвертации подряд).
 ZIP_MAX_FILES = 200
-ZIP_MAX_TOTAL_UNCOMPRESSED_MB = 500
+ZIP_MAX_TOTAL_UNCOMPRESSED_MB = 200  # ПТ-24: было 500
 
 
 @router.post("/zip")
-async def upload_zip(
+def upload_zip(
     file:           UploadFile = File(...),
     direction:      str            = Form("economy"),
     mode:           str            = Form("dag"),  # "dag" | "direct"
@@ -595,7 +611,16 @@ async def upload_zip(
     import tempfile
     import zipfile
 
-    content = await file.read()
+    content = read_upload(file, MAX_ZIP_UPLOAD_MB)
+    zip_name = safe_filename(file.filename, "archive.zip")
+    with parse_slot():
+        return _upload_zip_impl(content, zip_name, direction, mode)
+
+
+def _upload_zip_impl(content, zip_name, direction, mode):
+    import shutil
+    import tempfile
+    import zipfile
 
     with tempfile.TemporaryDirectory(prefix="zip_upload_") as tmp_dir:
         tmp_path = Path(tmp_dir)
@@ -613,6 +638,12 @@ async def upload_zip(
                         "Разбейте на несколько архивов."
                     )
 
+                too_big = [i.filename for i in infos if i.file_size > MAX_UPLOAD_MB * 1024 * 1024]
+                if too_big:
+                    raise HTTPException(
+                        400,
+                        f"В архиве есть файлы больше {MAX_UPLOAD_MB:g} МБ: {', '.join(safe_filename(n) for n in too_big[:5])}"
+                    )
                 total_size_mb = sum(i.file_size for i in infos) / (1024 * 1024)
                 if total_size_mb > ZIP_MAX_TOTAL_UNCOMPRESSED_MB:
                     raise HTTPException(
@@ -651,6 +682,10 @@ async def upload_zip(
             rel_name = str(path.relative_to(extract_dir))
             try:
                 file_bytes = path.read_bytes()
+                if len(file_bytes) > MAX_UPLOAD_MB * 1024 * 1024:
+                    raise ValueError(f"файл больше {MAX_UPLOAD_MB:g} МБ")
+                if rel_name.lower().endswith(".csv"):
+                    check_lines(file_bytes)
                 xl, categorical_rows = extract_sheets(
                     rel_name, file_bytes, catalog=catalog, snapshot_year=datetime.now().year
                 )
@@ -757,9 +792,10 @@ async def upload_zip(
         raise HTTPException(422, f"Не удалось обработать ни одного файла. Ошибки: {failed}")
 
     try:
-        _save_to_raw_historical(all_rows_for_dag, f"zip:{file.filename}")
+        _save_to_raw_historical(all_rows_for_dag, f"zip:{zip_name}")
     except Exception as e:
-        raise HTTPException(500, f"Ошибка записи в БД: {e}")
+        logging.getLogger("etl").exception("raw_historical write failed")
+        raise HTTPException(500, "Ошибка записи в БД; подробности — в журнале сервера") from e
 
     try:
         run = _trigger_dag("dag_extract_historical")
@@ -769,7 +805,7 @@ async def upload_zip(
 
     return {
         "status":           "triggered" if dag_run_id else "saved_no_trigger",
-        "archive":          file.filename,
+        "archive":          zip_name,
         "files_total":      len(candidate_files),
         "files_succeeded":  len(succeeded),
         "files_failed":     len(failed),

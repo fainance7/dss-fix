@@ -56,6 +56,10 @@ async function loadMode() {
 let dssBusy = false;
 let dssDryRun = true;   // уточняется в loadMode()
 
+function escapeHtml(s) {
+    return String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
 async function checkDss(name) {
     // Подтверждение перед отправкой: каждая загрузка создаёт запись в
     // истории портала DSS, а удалять записи роль data_uploader не может
@@ -144,18 +148,20 @@ async function loadFiles() {
             container.innerHTML = '<div style="color:var(--text-muted);font-size:13px;text-align:center;padding:20px">Файлов пока нет. Запустите dag_build_excel.</div>';
             return;
         }
-        container.innerHTML = files.map(f => `
+        // ПТ-21: имя файла выводится только как текст (экранирование), без встроенных обработчиков
+        container.innerHTML = files.map((f, i) => `
             <div class="task-item">
-                <span style="font-family:var(--font-mono);color:var(--text-primary)">${f.name}</span>
-                <span style="color:var(--text-muted);font-size:12px">${f.size_kb ? f.size_kb.toFixed(1) + ' KB' : ''}</span>
+                <span style="font-family:var(--font-mono);color:var(--text-primary)">${escapeHtml(f.name)}</span>
+                <span style="color:var(--text-muted);font-size:12px">${f.size_kb ? Number(f.size_kb).toFixed(1) + ' KB' : ''}</span>
                 <span style="margin-left:auto;display:flex;gap:8px;align-items:center">
-                  <button class="btn"
-                     onclick="checkDss('${f.name.replace(/'/g, "\\'")}')">⇧ Проверить в DSS</button>
+                  <button class="btn btn-check-dss" data-idx="${i}">⇧ Проверить в DSS</button>
                   <a class="btn btn-primary btn-download"
                      href="/files/download/${encodeURIComponent(f.name)}">↓ Скачать</a>
                 </span>
             </div>
         `).join('');
+        container.querySelectorAll('.btn-check-dss').forEach(b =>
+            b.addEventListener('click', () => checkDss(files[Number(b.dataset.idx)].name)));
     } catch (e) {
         container.innerHTML = '<div style="color:var(--accent-red);font-size:13px;text-align:center;padding:20px">Ошибка загрузки списка файлов</div>';
     }

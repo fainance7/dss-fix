@@ -39,17 +39,21 @@ document.addEventListener('DOMContentLoaded', function () {
         }
     }
 
+    function esc(v) {
+        return String(v ?? '').replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
+    }
+
     function renderCard(c) {
         const status = STATUS_LABELS[c.status] || c.status || '—';
         return '<div style="border:1px solid var(--border-color,#eee);border-radius:8px;padding:14px;margin-bottom:10px">'
-            + '<div style="font-weight:600;margin-bottom:6px">' + (c.name_ru || '—') + '</div>'
+            + '<div style="font-weight:600;margin-bottom:6px">' + esc(c.name_ru || '—') + '</div>'
             + '<div style="font-size:13px;line-height:1.8;color:var(--text-secondary,#555)">'
-            + 'БИН: <strong>' + (c.bin || '—') + '</strong><br>'
-            + 'Статус: ' + status + '<br>'
-            + 'ОКЭД: ' + (c.oked || '—') + (c.oked_name_ru ? ' — ' + c.oked_name_ru : '') + '<br>'
-            + 'Размерность: ' + (c.krp_name_ru || '—') + '<br>'
-            + 'Руководитель: ' + (c.fio || '—') + '<br>'
-            + 'Адрес: ' + (c.address_ru || '—')
+            + 'БИН: <strong>' + esc(c.bin || '—') + '</strong><br>'
+            + 'Статус: ' + esc(status) + '<br>'
+            + 'ОКЭД: ' + esc(c.oked || '—') + (c.oked_name_ru ? ' — ' + esc(c.oked_name_ru) : '') + '<br>'
+            + 'Размерность: ' + esc(c.krp_name_ru || '—') + '<br>'
+            + 'Руководитель: ' + esc(c.fio || '—') + '<br>'
+            + 'Адрес: ' + esc(c.address_ru || '—')
             + '</div></div>';
     }
 

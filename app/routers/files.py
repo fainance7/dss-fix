@@ -15,11 +15,13 @@ def list_files():
 
 @router.get("/download/{filename}")
 def download_file(filename: str):
-    filepath = ARTIFACTS_DIR / filename
-    if not filepath.exists():
+    # только файлы каталога артефактов, без подкаталогов и выхода за его пределы (ПТ-14)
+    safe = Path(filename).name
+    filepath = ARTIFACTS_DIR / safe
+    if safe in ("", ".", "..") or safe != filename or not filepath.is_file():
         raise HTTPException(status_code=404, detail="Файл не найден")
     return FileResponse(
         filepath,
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        filename=filename
+        filename=safe
     )

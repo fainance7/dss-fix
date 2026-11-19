@@ -152,8 +152,8 @@ async function refreshDashboard() {
         }
         list.innerHTML = data.runs.slice(0, 10).map(run => `
             <div class="task-item">
-                <span class="task-badge ${run.state}">${(run.state || 'unknown').toUpperCase()}</span>
-                <span class="task-source">${run.dag_id}</span>
+                <span class="task-badge ${escapeHtml(run.state)}">${escapeHtml((run.state || 'unknown').toUpperCase())}</span>
+                <span class="task-source">${escapeHtml(run.dag_id)}</span>
                 <span class="task-time">${formatTime(run.start_date)}</span>
             </div>
         `).join('');
@@ -207,8 +207,8 @@ async function loadFailedLogs() {
         errorsTbody.innerHTML = data.errors.map(err => `
             <tr>
                 <td>
-                    <div style="font-weight:600">${err.dag_id || '—'}</div>
-                    <div style="font-size:11px;color:var(--text-muted);font-family:var(--font-mono)">${err.task_id || '—'}</div>
+                    <div style="font-weight:600">${escapeHtml(err.dag_id || '—')}</div>
+                    <div style="font-size:11px;color:var(--text-muted);font-family:var(--font-mono)">${escapeHtml(err.task_id || '—')}</div>
                 </td>
                 <td class="err-msg">${escapeHtml(formatErrorMessage(err))}</td>
                 <td style="white-space:nowrap;font-family:var(--font-mono);font-size:11px;color:var(--text-muted)">${formatTime(err.end_date || err.start_date)}</td>

@@ -88,6 +88,12 @@ services:
     env_file:
       - .env
       - geo/.env
+    environment:
+      # X-Forwarded-For принимается только от обратного прокси площадки (адрес или подсеть proxy-net)
+      FORWARDED_ALLOW_IPS: ${ETL_TRUSTED_PROXY_IPS:-127.0.0.1}
+    # ПТ-24: ограничение памяти контейнера — сбой разбора файла не затрагивает другие сервисы сервера
+    mem_limit: ${ETL_MEM_LIMIT:-4g}
+    memswap_limit: ${ETL_MEM_LIMIT:-4g}
     ports:
       - "127.0.0.1:8010:8000"
     volumes:

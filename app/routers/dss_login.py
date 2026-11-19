@@ -6,6 +6,8 @@ import httpx
 from fastapi import APIRouter, Form, Query, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 
+from security import client_ip, log_event
+
 router = APIRouter(prefix="/upload", tags=["DSS SSO"])
 
 DSS_BACKEND_URL = os.environ.get("DSS_BACKEND_URL", "http://dss-backend:8000")
@@ -36,10 +38,9 @@ def _page(error_html: str, next_path: str) -> str:
 
 
 def _client_ip(request: Request) -> str:
-    fwd = request.headers.get("x-forwarded-for")
-    if fwd:
-        return fwd.split(",")[0].strip() or "unknown"
-    return request.client.host if request.client else "unknown"
+    """ПТ-11: адрес клиента берётся из соединения; X-Forwarded-For учитывает только
+    Uvicorn и только от доверенного прокси (FORWARDED_ALLOW_IPS)."""
+    return client_ip(request)
 
 def _login_blocked(ip: str) -> bool:
     now = time.time()
@@ -89,6 +90,7 @@ async def login_submit(
     # M-4: rate-limit per client IP before proxying to DSS backend.
     ip = _client_ip(request)
     if _login_blocked(ip):
+        log_event("login_blocked", request, user=username)
         return HTMLResponse(
             _page(
                 '<div class="err">Слишком много неудачных попыток входа. '
@@ -114,6 +116,7 @@ async def login_submit(
 
     if resp.status_code != 200:
         _record_login_failure(ip)  # M-4: count this failure for rate limiting
+        log_event("login_failed", request, user=username)
         return HTMLResponse(
             _page(
                 '<div class="err">Неверный логин или пароль</div>',
@@ -123,6 +126,7 @@ async def login_submit(
         )
 
     _login_fails.pop(ip, None)  # M-4: successful login clears the failure count
+    log_event("login_ok", request, user=username)
     token = resp.json().get("access_token")
     response = RedirectResponse(url=next_, status_code=303)
     response.set_cookie(

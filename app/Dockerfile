@@ -13,4 +13,5 @@ COPY . .
 RUN useradd --system --uid 10001 --home-dir /app --shell /usr/sbin/nologin etl \
     && mkdir -p /app/artifacts && chown -R etl:etl /app/artifacts
 USER etl
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000", "--proxy-headers"]
+# X-Forwarded-For принимается только от доверенного прокси: FORWARDED_ALLOW_IPS (по умолчанию 127.0.0.1)
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000", "--proxy-headers", "--no-server-header"]

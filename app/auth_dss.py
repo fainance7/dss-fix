@@ -4,6 +4,8 @@ import time
 
 import httpx
 from fastapi import HTTPException, Request
+
+from security import log_event
 import jwt  # PyJWT (Р-9: python-jose заменена)
 from jwt import InvalidTokenError as JWTError
 
@@ -73,5 +75,7 @@ def require_dss_session(request: Request):
         raise NotAuthenticated(next_path=request.url.path)
     roles = {r.get("name") for r in me.get("roles", [])}
     if not roles & ETL_ALLOWED_ROLES:
+        log_event("access_denied_role", request, user=me.get("username") or payload.get("sub"), roles=",".join(sorted(r for r in roles if r)))
         raise HTTPException(403, "Недостаточно прав для загрузки данных")
+    request.state.user = me.get("username") or payload.get("sub")
     return payload

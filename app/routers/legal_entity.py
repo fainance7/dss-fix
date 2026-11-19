@@ -40,7 +40,7 @@ async def _search_dadata(q: str) -> list[dict]:
         except httpx.HTTPStatusError as exc:
             raise HTTPException(status_code=502, detail=f"Ошибка DaData: {exc.response.status_code}")
         except httpx.RequestError as exc:
-            raise HTTPException(status_code=502, detail=f"Не удалось связаться с DaData: {exc}")
+            raise HTTPException(status_code=502, detail=f"Не удалось связаться с DaData ({type(exc).__name__})")
 
     raw = resp.json().get("suggestions", [])
     results = []
@@ -92,7 +92,7 @@ async def _search_egov(q: str) -> list[dict]:
         except httpx.HTTPStatusError as exc:
             raise HTTPException(status_code=502, detail=f"Ошибка data.egov.kz: {exc.response.status_code}")
         except httpx.RequestError as exc:
-            raise HTTPException(status_code=502, detail=f"Не удалось связаться с data.egov.kz: {exc}")
+            raise HTTPException(status_code=502, detail=f"Не удалось связаться с data.egov.kz ({type(exc).__name__})")
 
     raw = resp.json()
     if not isinstance(raw, list):

@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException, Security, Depends
+from fastapi import FastAPI, HTTPException, Request, Security, Depends
 from fastapi.security import APIKeyHeader
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import RedirectResponse
@@ -10,6 +10,7 @@ from routers.upload import router as upload_router
 from routers.upload_parser import router as upload_parser_router
 from routers.dss_login import router as dss_login_router
 from auth_dss import require_dss_session, NotAuthenticated
+from security import BodySizeLimitMiddleware, SecurityHeadersMiddleware, log_event
 
 API_KEY        = os.environ.get("API_SECRET_KEY")
 if not API_KEY:
@@ -17,13 +18,20 @@ if not API_KEY:
 
 api_key_header = APIKeyHeader(name="X-API-Key")
 
-def verify_api_key(key: str = Security(api_key_header)):
+def verify_api_key(request: Request, key: str = Security(api_key_header)):
     # У-14: сравнение за постоянное время
     if not key or not secrets.compare_digest(key.encode(), API_KEY.encode()):
+        log_event("api_key_denied", request)
         raise HTTPException(status_code=403, detail="Invalid API Key")
     return key
 
-app = FastAPI(title="aldispetro.kz ETL API", version="1.0.0")
+# Документация API (/docs, /redoc, /openapi.json) в рабочем режиме не публикуется (ПТ-02).
+_DOCS = os.environ.get("ETL_ENABLE_DOCS", "false").strip().lower() == "true"
+app = FastAPI(title="aldispetro.kz ETL API", version="1.0.0",
+              docs_url="/docs" if _DOCS else None, redoc_url="/redoc" if _DOCS else None,
+              openapi_url="/openapi.json" if _DOCS else None)
+app.add_middleware(SecurityHeadersMiddleware)
+app.add_middleware(BodySizeLimitMiddleware)
 
 app.mount("/static", StaticFiles(directory="static"), name="static")
 

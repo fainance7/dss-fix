@@ -101,7 +101,7 @@ def dss_check(filename: str):
                 timeout=UPLOAD_TIMEOUT,
             )
     except Exception as e:
-        raise HTTPException(502, f"Не удалось связаться с DSS: {str(e)[:200]}")
+        raise HTTPException(502, f"Не удалось связаться с DSS ({type(e).__name__})")
 
     if resp.status_code != 200:
         raise HTTPException(
