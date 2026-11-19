@@ -1,0 +1,235 @@
+{% extends "upload/base_upload.html" %}
+
+{% block title %}Upload Interface{% endblock %}
+{% block breadcrumb %}Upload{% endblock %}
+{% block page_title %}ETL Upload Interface{% endblock %}
+
+{% block content %}
+<div class="grid-4">
+    <div class="stat-card">
+        <div class="stat-label">Всего запусков</div>
+        <div class="stat-value" id="stat-total">{{ stats.total }}</div>
+        <div class="stat-desc">за последние запуски</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-label">Успешных</div>
+        <div class="stat-value" id="stat-success" style="color: var(--accent-green)">{{ stats.success }}</div>
+        <div class="stat-desc">завершены без ошибок</div>
+    </div>
+    <div class="stat-card running-card">
+        <div class="stat-label">В процессе (Running)</div>
+        <div class="stat-value" id="stat-running" style="color: var(--accent-blue)">
+            <span class="spinner" id="running-spinner"></span>
+            <span id="running-count">{{ stats.running }}</span>
+        </div>
+        <div class="stat-desc">активных DAG-ов</div>
+    </div>
+    <div class="stat-card clickable" id="stat-failed-card" title="Нажмите, чтобы посмотреть логи ошибок">
+        <div class="stat-label">С ошибками</div>
+        <div class="stat-value" id="stat-failed" style="color: var(--accent-red)">{{ stats.failed }}</div>
+        <div class="stat-desc">нажмите для детализации →</div>
+    </div>
+</div>
+
+<div class="source-cards">
+    <a href="/upload/manual" class="source-card blue">
+        <div class="sc-icon">↑</div>
+        <div>
+            <div class="sc-title">Ручная загрузка</div>
+            <div class="sc-desc">Excel, CSV, PDF, Word или ZIP-архив. Превью данных перед генерацией DSS Excel.</div>
+        </div>
+        <div class="sc-arrow">Открыть →</div>
+    </a>
+    <a href="/upload/taldau" class="source-card green">
+        <div class="sc-icon">⊞</div>
+        <div>
+            <div class="sc-title">Taldau + Гос. API</div>
+            <div class="sc-desc">Автоматический сбор данных через Taldau API. Занятость, демография, образование по СКО.</div>
+        </div>
+        <div class="sc-arrow">Открыть →</div>
+    </a>
+    <a href="/upload/climate" class="source-card amber">
+        <div class="sc-icon">◎</div>
+        <div>
+            <div class="sc-title">Климат API</div>
+            <div class="sc-desc">Сбор климатических данных через Open-Meteo. Температура, осадки, ГТК по районам СКО.</div>
+        </div>
+        <div class="sc-arrow">Открыть →</div>
+    </a>
+    <a href="/upload/files" class="source-card" style="border-color: var(--border)">
+        <div class="sc-icon" style="background: var(--bg-card-hover); color: var(--text-secondary)">📦</div>
+        <div>
+            <div class="sc-title">Готовые файлы</div>
+            <div class="sc-desc">Список сгенерированных DSS Excel файлов с возможностью скачать и передать в DSS вручную.</div>
+        </div>
+        <div class="sc-arrow">Открыть →</div>
+    </a>
+</div>
+
+<div class="card">
+    <div class="card-title"><span>◷</span> Последние запуски DAG-ов</div>
+    <div class="task-list" id="history-list">
+        {% for run in history %}
+        <div class="task-item">
+            <span class="task-badge {{ run.state }}">{{ run.state.upper() }}</span>
+            <span class="task-source">{{ run.dag_id }}</span>
+            <span class="task-time">{{ run.start_date[:16].replace('T', ' ') if run.start_date else '—' }}</span>
+        </div>
+        {% else %}
+        <div style="color: var(--text-muted); font-size: 13px; text-align: center; padding: 20px;">
+            Запусков пока нет. Запустите загрузку данных.
+        </div>
+        {% endfor %}
+    </div>
+</div>
+
+<!-- Модальное окно логов ошибок (Задача 1.5) -->
+<div class="modal-overlay" id="errors-modal">
+    <div class="modal" style="max-width:900px">
+        <button class="modal-close" id="errors-close" title="Закрыть">&times;</button>
+        <div class="modal-header">
+            <h2>Логи ошибок DAG-ов</h2>
+        </div>
+        <div class="modal-summary" id="errors-summary">Загрузка...</div>
+        <div class="modal-body">
+            <table class="error-log-table">
+                <thead>
+                    <tr>
+                        <th>DAG / Задача</th>
+                        <th>Описание ошибки</th>
+                        <th>Время</th>
+                    </tr>
+                </thead>
+                <tbody id="errors-tbody"></tbody>
+            </table>
+        </div>
+        <div class="loading-overlay" id="errors-loader">
+            <div class="spinner spinner-lg"></div>
+            <span>Загрузка логов...</span>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const errorsModal  = document.getElementById('errors-modal');
+const errorsTbody  = document.getElementById('errors-tbody');
+const errorsSummary = document.getElementById('errors-summary');
+const errorsLoader = document.getElementById('errors-loader');
+const runningSpinner = document.getElementById('running-spinner');
+
+function formatTime(iso) {
+    if (!iso) return '—';
+    return iso.slice(0, 16).replace('T', ' ');
+}
+
+function updateStatsFromRuns(runs) {
+    const running = runs.filter(r => ['running', 'queued'].includes(r.state)).length;
+    const success = runs.filter(r => r.state === 'success').length;
+    const failed  = runs.filter(r => r.state === 'failed').length;
+
+    document.getElementById('stat-total').textContent   = runs.length;
+    document.getElementById('stat-success').textContent = success;
+    document.getElementById('stat-failed').textContent  = failed;
+    document.getElementById('running-count').textContent = running;
+
+    runningSpinner.style.display = running > 0 ? 'inline-block' : 'none';
+}
+
+async function refreshDashboard() {
+    try {
+        const resp = await fetch('/upload/api/history');
+        const data = await resp.json();
+        if (!data.success || !data.runs) return;
+
+        updateStatsFromRuns(data.runs);
+
+        const list = document.getElementById('history-list');
+        if (!data.runs.length) {
+            list.innerHTML = '<div style="color:var(--text-muted);font-size:13px;text-align:center;padding:20px">Запусков пока нет.</div>';
+            return;
+        }
+        list.innerHTML = data.runs.slice(0, 10).map(run => `
+            <div class="task-item">
+                <span class="task-badge ${run.state}">${(run.state || 'unknown').toUpperCase()}</span>
+                <span class="task-source">${run.dag_id}</span>
+                <span class="task-time">${formatTime(run.start_date)}</span>
+            </div>
+        `).join('');
+    } catch (e) {}
+}
+
+function openErrorsModal() {
+    errorsModal.classList.add('visible');
+    errorsLoader.classList.add('visible');
+    errorsTbody.innerHTML = '';
+    errorsSummary.textContent = 'Загрузка...';
+    loadFailedLogs();
+}
+
+function closeErrorsModal() {
+    errorsModal.classList.remove('visible');
+    errorsLoader.classList.remove('visible');
+}
+
+function formatErrorMessage(err) {
+    // Backend отдаёт готовое поле message (extract_error_message на сервере).
+    // Если позже API начнёт возвращать раздельные поля — собираем шаблон:
+    // "Файл {filename}: {описание} на странице {page}"
+    if (err.filename) {
+        const desc = err.error_description || err.error_type || err.message || 'ошибка обработки';
+        let text = `Файл ${err.filename}: ${desc}`;
+        if (err.page_number != null) text += ` на странице ${err.page_number}`;
+        return text;
+    }
+    return err.message || '—';
+}
+
+async function loadFailedLogs() {
+    try {
+        const resp = await fetch('/upload/api/failed-logs');
+        const data = await resp.json();
+        errorsLoader.classList.remove('visible');
+
+        if (!resp.ok || !data.success) {
+            errorsSummary.textContent = 'Не удалось загрузить логи ошибок';
+            return;
+        }
+
+        errorsSummary.textContent = `Найдено записей: ${data.total}`;
+
+        if (!data.errors || !data.errors.length) {
+            errorsTbody.innerHTML = '<tr><td colspan="3" style="text-align:center;color:var(--text-muted);padding:20px">Ошибок не найдено</td></tr>';
+            return;
+        }
+
+        errorsTbody.innerHTML = data.errors.map(err => `
+            <tr>
+                <td>
+                    <div style="font-weight:600">${err.dag_id || '—'}</div>
+                    <div style="font-size:11px;color:var(--text-muted);font-family:var(--font-mono)">${err.task_id || '—'}</div>
+                </td>
+                <td class="err-msg">${escapeHtml(formatErrorMessage(err))}</td>
+                <td style="white-space:nowrap;font-family:var(--font-mono);font-size:11px;color:var(--text-muted)">${formatTime(err.end_date || err.start_date)}</td>
+            </tr>
+        `).join('');
+    } catch (e) {
+        errorsLoader.classList.remove('visible');
+        errorsSummary.textContent = 'Сетевая ошибка: ' + e.message;
+    }
+}
+
+function escapeHtml(s) {
+    return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+document.getElementById('stat-failed-card').addEventListener('click', openErrorsModal);
+document.getElementById('errors-close').addEventListener('click', closeErrorsModal);
+errorsModal.addEventListener('click', e => { if (e.target === errorsModal) closeErrorsModal(); });
+
+runningSpinner.style.display = {{ stats.running }} > 0 ? 'inline-block' : 'none';
+refreshDashboard();
+setInterval(refreshDashboard, 15000);
+</script>
+{% endblock %}

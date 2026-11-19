@@ -1,0 +1,170 @@
+{% extends "upload/base_upload.html" %}
+
+{% block title %}Климат API{% endblock %}
+{% block breadcrumb %}Upload / Климат API{% endblock %}
+{% block page_title %}Климат API — Климатические данные{% endblock %}
+
+{% block content %}
+<div class="grid-2">
+    <div>
+        <div class="card">
+            <div class="card-title"><span>◎</span> Период сбора данных</div>
+            <div class="year-range">
+                <div class="form-group">
+                    <label class="form-label">Год с</label>
+                    <input type="number" class="form-control" id="year-from" value="2020" min="2003" max="2024">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Год по</label>
+                    <input type="number" class="form-control" id="year-to" value="2024" min="2003" max="2025">
+                </div>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-title"><span>🗺</span> Районы СКО</div>
+            <div style="display:flex;gap:8px;margin-bottom:10px">
+                <button class="btn btn-outline" onclick="selectDistricts(true)"  style="font-size:12px;padding:6px 12px">Все районы</button>
+                <button class="btn btn-outline" onclick="selectDistricts(false)" style="font-size:12px;padding:6px 12px">Снять все</button>
+            </div>
+            <div class="district-grid" id="district-grid"></div>
+        </div>
+
+        <div class="card">
+            <button class="btn btn-amber" id="run-btn" style="width:100%" onclick="runClimate()">
+                ▶ Запустить dag_extract_weather
+            </button>
+        </div>
+    </div>
+
+    <div>
+        <div class="status-block" id="status-block">
+            <div class="status-header"><div class="status-dot"></div><span id="status-title">Выполняется...</span></div>
+            <div class="status-message" id="status-message"></div>
+        </div>
+
+        <div class="card">
+            <div class="card-title"><span>📡</span> Климат API</div>
+            <div style="font-size:13px;color:var(--text-secondary);line-height:1.8">
+                Бесплатный открытый API исторических данных о погоде. Архив с 1940 года.<br><br>
+                <strong style="color:var(--text-primary)">Центр СКО:</strong>
+                <span style="font-family:var(--font-mono);color:var(--accent-amber)">54.8679°N, 69.1451°E</span><br><br>
+                <a href="https://open-meteo.com/en/docs" target="_blank" style="color:var(--accent-blue);text-decoration:none">→ Документация Open-Meteo</a>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-title"><span>ℹ</span> Что будет загружено</div>
+            <div style="font-size:12px;color:var(--text-muted);line-height:2">
+                <div>✓ Сумма активных температур &gt;10°C (Σt)</div>
+                <div>✓ Гидротермический коэффициент (ГТК Селянинова)</div>
+                <div>✓ Коэффициент увлажнения (K)</div>
+                <div>✓ Продолжительность вегетационного периода</div>
+                <div>✓ Дата перехода температуры через 10°C весной</div>
+                <div>✓ Доля метеостанций района с ГТК&lt;0,80</div>
+                <div>✓ Доля метеостанций района с K&lt;0,80</div>
+                <div>✓ Доля метеостанций с Σt&lt;2300 °C·сут</div>
+                <div>✓ Доля метеостанций с вегет. периодом &lt;140 сут</div>
+            </div>
+            <div style="font-size:11px;color:var(--text-muted);margin-top:8px;padding-top:8px;border-top:1px solid rgba(0,0,0,0.08)">
+                Сеть: 19 метеостанций СКО (координаты Казгидромета), период 2003–2024.
+                ГТК и K берутся из фактических наблюдений Казгидромета; Σt, вегетация и
+                дата перехода рассчитываются по Open-Meteo. Доли метеостанций считаются
+                прямым подсчётом по станциям района.
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const DISTRICTS = [
+    { code: "all",       name: "Все районы" },
+    { code: "petropavl", name: "Петропавловск" },
+    { code: "akkain",    name: "Аккайынский" },
+    { code: "ayirtau",   name: "Айыртауский" },
+    { code: "akzhar",    name: "Акжарский" },
+    { code: "esil",      name: "Есильский" },
+    { code: "zhambyl",   name: "Жамбылский" },
+    { code: "maambet",   name: "М. Жумабаева" },
+    { code: "kyrykzhal", name: "Кызылжарский" },
+    { code: "sealsk",    name: "Уалихановский" },
+    { code: "timiriaz",  name: "Тимирязевский" },
+    { code: "shalbaly",  name: "Шал акын" },
+];
+
+document.getElementById('district-grid').innerHTML = DISTRICTS.map(d => `
+    <label class="indicator-checkbox">
+        <input type="checkbox" value="${d.code}" ${d.code === 'all' ? 'checked' : ''}>
+        <div class="ind-name">${d.name}</div>
+    </label>
+`).join('');
+
+document.getElementById('district-grid').addEventListener('change', e => {
+    if (e.target.value === 'all' && e.target.checked) {
+        document.querySelectorAll('#district-grid input').forEach(cb => { if (cb.value !== 'all') cb.checked = false; });
+    } else if (e.target.value !== 'all') {
+        const allCb = document.querySelector('#district-grid input[value="all"]');
+        if (allCb) allCb.checked = false;
+    }
+});
+
+function selectDistricts(checked) {
+    document.querySelectorAll('#district-grid input').forEach(cb => cb.checked = false);
+    if (checked) document.querySelector('#district-grid input[value="all"]').checked = true;
+}
+
+let polling = null;
+
+async function runClimate() {
+    const selected = [...document.querySelectorAll('#district-grid input:checked')].map(cb => cb.value);
+    if (!selected.length) { alert('Выберите хотя бы один район'); return; }
+
+    const yearFrom = parseInt(document.getElementById('year-from').value);
+    const yearTo   = parseInt(document.getElementById('year-to').value);
+    if (yearFrom > yearTo) { alert('Год "с" не может быть больше "по"'); return; }
+
+    document.getElementById('run-btn').disabled = true;
+    showStatus('running', `Запускаю dag_extract_weather за ${yearFrom}–${yearTo}...`);
+
+    try {
+        const resp = await fetch('/upload/api/climate/run', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ year_from: yearFrom, year_to: yearTo, districts: selected })
+        });
+        const data = await resp.json();
+        if (!data.success) { showStatus('error', data.detail || 'Ошибка'); resetBtn(); return; }
+        pollDag(data.dag_id, data.dag_run_id);
+    } catch(e) { showStatus('error', 'Сетевая ошибка: ' + e.message); resetBtn(); }
+}
+
+function pollDag(dagId, dagRunId) {
+    polling = setInterval(async () => {
+        try {
+            const resp = await fetch(`/upload/api/dag-status/${dagId}/${dagRunId}`);
+            const data = await resp.json();
+            const state = data.state || 'unknown';
+            const msgs  = { running:'DAG выполняется...', success:'DAG завершён успешно!', failed:'DAG завершился с ошибкой.', queued:'В очереди Airflow...' };
+            showStatus(state === 'failed' ? 'error' : state, msgs[state] || state);
+            if (['success','failed'].includes(state)) { clearInterval(polling); resetBtn(); }
+        } catch(e) {}
+    }, 3000);
+}
+
+function showStatus(status, message) {
+    const sb = document.getElementById('status-block');
+    sb.className = `status-block visible ${status}`;
+    const titles = { running:'Выполняется...', success:'Готово!', error:'Ошибка', queued:'В очереди' };
+    document.getElementById('status-title').textContent   = titles[status] || status;
+    document.getElementById('status-message').textContent = message;
+}
+
+function resetBtn() {
+    const btn = document.getElementById('run-btn');
+    btn.disabled = false;
+    btn.textContent = '▶ Запустить dag_extract_weather';
+}
+</script>
+{% endblock %}

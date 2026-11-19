@@ -1,0 +1,166 @@
+{% extends "upload/base_upload.html" %}
+{% block title %}Готовые файлы{% endblock %}
+{% block breadcrumb %}Upload / Готовые файлы{% endblock %}
+{% block page_title %}Готовые файлы DSS{% endblock %}
+{% block content %}
+<div class="card">
+    <div class="card-title"><span>📦</span> Файлы для загрузки в DSS</div>
+    <p style="font-size:12px;color:var(--text-muted);margin-bottom:8px">
+        Файлы формата DSS (5 листов: README, Indicators, KATO, Values, Source), готовые к загрузке через
+        <code style="color:var(--accent-amber)">http://89.207.253.64/dashboard/data-intake</code>
+    </p>
+    <div id="dss-mode" style="font-size:12px;margin-bottom:16px"></div>
+    <div id="files-list">
+        <div style="color:var(--text-muted);font-size:13px;text-align:center;padding:20px">Загрузка списка файлов...</div>
+    </div>
+</div>
+
+<div id="dss-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);
+     z-index:1000;align-items:center;justify-content:center">
+  <div style="background:var(--bg-card,#fff);border-radius:8px;max-width:820px;width:92%;
+       max-height:86vh;overflow:auto;padding:22px">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
+      <h3 style="margin:0;font-size:16px">Проверка в DSS</h3>
+      <span onclick="closeDss()" style="cursor:pointer;font-size:20px;color:var(--text-muted)">×</span>
+    </div>
+    <div id="dss-body" style="font-size:13px"></div>
+    <div style="text-align:right;margin-top:18px">
+      <button class="btn" onclick="closeDss()">Закрыть</button>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function closeDss() { document.getElementById('dss-modal').style.display = 'none'; }
+
+async function loadMode() {
+    try {
+        const r = await fetch('/dss/status');
+        const s = await r.json();
+        const el = document.getElementById('dss-mode');
+        if (!s.configured) {
+            el.innerHTML = '<span style="color:var(--accent-red)">⚠ DSS не настроен: нет URL или ключа в .env</span>';
+            dssDryRun = !!s.dry_run;
+        } else if (s.dry_run) {
+            el.innerHTML = '<span style="color:var(--accent-amber)">⚠ Режим проверки (DSS_DRY_RUN=true): '
+                         + 'кнопка работает, но запросы в DSS не отправляются</span>';
+        } else {
+            el.innerHTML = '<span style="color:var(--accent-green,#22a06b)">● Отправка в DSS включена. '
+                         + 'Партия создаётся как черновик — импорт подтверждается в самом портале</span>';
+        }
+    } catch (e) { /* статус не критичен для списка файлов */ }
+}
+
+let dssBusy = false;
+let dssDryRun = true;   // уточняется в loadMode()
+
+async function checkDss(name) {
+    // Подтверждение перед отправкой: каждая загрузка создаёт запись в
+    // истории портала DSS, а удалять записи роль data_uploader не может
+    // (DELETE отдаёт 403). Случайный двойной клик оставлял бы дубли,
+    // которые убрать своими силами уже нельзя.
+    if (dssBusy) return;
+    // Текст подтверждения зависит от режима: в сухом прогоне обещать
+    // "запись останется в истории" неверно — запроса не будет вообще,
+    // и предупреждение вводило бы в заблуждение.
+    const msg = dssDryRun
+        ? 'Проверить «' + name + '»?\n\n'
+          + 'Сейчас включён режим проверки (DSS_DRY_RUN=true): '
+          + 'запрос в DSS НЕ отправляется, следов в портале не остаётся.'
+        : 'Отправить «' + name + '» в DSS на проверку?\n\n'
+          + 'Будет создан ЧЕРНОВИК партии. Данные в базу DSS не попадут, '
+          + 'но запись останется в истории портала и удалить её сможет '
+          + 'только администратор DSS.';
+    if (!confirm(msg)) return;
+    dssBusy = true;
+    setTimeout(() => { dssBusy = false; }, 3000);
+
+    const modal = document.getElementById('dss-modal');
+    const body = document.getElementById('dss-body');
+    modal.style.display = 'flex';
+    body.innerHTML = '<div style="padding:24px;text-align:center;color:var(--text-muted)">'
+                   + 'Отправка файла и валидация на стороне DSS…<br>'
+                   + '<span style="font-size:12px">Для больших файлов это занимает до минуты</span></div>';
+
+    try {
+        const r = await fetch('/dss/check/' + encodeURIComponent(name), { method: 'POST' });
+        const d = await r.json();
+
+        if (!r.ok) {
+            body.innerHTML = '<div style="color:var(--accent-red)">Ошибка: '
+                           + (d.detail || r.status) + '</div>';
+            return;
+        }
+        if (d.dry_run) {
+            body.innerHTML = '<div style="font-family:var(--font-mono);margin-bottom:12px">'
+                + d.filename + ' · ' + d.size_kb + ' KB</div>'
+                + '<div style="padding:14px;border-radius:6px;background:rgba(255,180,0,.12);'
+                + 'color:var(--accent-amber)">' + d.message + '</div>';
+            return;
+        }
+
+        const pct = d.rows_total ? Math.round(d.rows_ok * 100 / d.rows_total) : 0;
+        let html = '<div style="font-family:var(--font-mono);margin-bottom:14px">'
+                 + d.filename + ' · ' + d.size_kb + ' KB · job ' + (d.job_id || '—') + '</div>'
+                 + '<div style="display:flex;gap:10px;margin-bottom:16px;flex-wrap:wrap">'
+                 + '<div style="flex:1;min-width:120px;padding:10px;border-radius:6px;background:rgba(128,128,128,.1)">'
+                 + '<div style="font-size:11px;color:var(--text-muted)">Всего строк</div>'
+                 + '<div style="font-size:20px">' + d.rows_total + '</div></div>'
+                 + '<div style="flex:1;min-width:120px;padding:10px;border-radius:6px;background:rgba(34,160,107,.12)">'
+                 + '<div style="font-size:11px;color:var(--text-muted)">Готовы к импорту</div>'
+                 + '<div style="font-size:20px;color:#22a06b">' + d.rows_ok + ' <span style="font-size:12px">(' + pct + '%)</span></div></div>'
+                 + '<div style="flex:1;min-width:120px;padding:10px;border-radius:6px;background:rgba(220,60,60,.12)">'
+                 + '<div style="font-size:11px;color:var(--text-muted)">С ошибками</div>'
+                 + '<div style="font-size:20px;color:#dc3c3c">' + d.rows_invalid + '</div></div>'
+                 + '</div>';
+
+        if (d.top_errors && d.top_errors.length) {
+            html += '<div style="font-size:12px;color:var(--text-muted);margin-bottom:6px">Частые ошибки:</div>';
+            html += d.top_errors.map(e =>
+                '<div style="padding:7px 0;border-bottom:1px solid rgba(128,128,128,.15);display:flex;gap:10px">'
+                + '<span style="flex:1">' + e[0] + '</span>'
+                + '<span style="color:var(--text-muted);white-space:nowrap">×' + e[1] + '</span></div>'
+            ).join('');
+        }
+        html += '<div style="margin-top:16px;padding:12px;border-radius:6px;'
+              + 'background:rgba(255,180,0,.12);color:var(--accent-amber);font-size:12px">'
+              + d.note + '</div>';
+        body.innerHTML = html;
+
+    } catch (e) {
+        body.innerHTML = '<div style="color:var(--accent-red)">Сбой запроса: ' + e + '</div>';
+    }
+}
+
+async function loadFiles() {
+    const container = document.getElementById('files-list');
+    try {
+        const resp = await fetch('/files/list');
+        const data = await resp.json();
+        const files = Array.isArray(data) ? data : (data.files || []);
+        if (!files.length) {
+            container.innerHTML = '<div style="color:var(--text-muted);font-size:13px;text-align:center;padding:20px">Файлов пока нет. Запустите dag_build_excel.</div>';
+            return;
+        }
+        container.innerHTML = files.map(f => `
+            <div class="task-item">
+                <span style="font-family:var(--font-mono);color:var(--text-primary)">${f.name}</span>
+                <span style="color:var(--text-muted);font-size:12px">${f.size_kb ? f.size_kb.toFixed(1) + ' KB' : ''}</span>
+                <span style="margin-left:auto;display:flex;gap:8px;align-items:center">
+                  <button class="btn"
+                     onclick="checkDss('${f.name.replace(/'/g, "\\'")}')">⇧ Проверить в DSS</button>
+                  <a class="btn btn-primary btn-download"
+                     href="/files/download/${encodeURIComponent(f.name)}">↓ Скачать</a>
+                </span>
+            </div>
+        `).join('');
+    } catch (e) {
+        container.innerHTML = '<div style="color:var(--accent-red);font-size:13px;text-align:center;padding:20px">Ошибка загрузки списка файлов</div>';
+    }
+}
+
+document.addEventListener('DOMContentLoaded', () => { loadMode(); loadFiles(); });
+</script>
+{% endblock %}

@@ -1,0 +1,374 @@
+{% extends "upload/base_upload.html" %}
+
+{% block title %}Taldau API{% endblock %}
+{% block breadcrumb %}Upload / Taldau + Гос. API{% endblock %}
+{% block page_title %}Taldau + Государственные API{% endblock %}
+
+{% block extra_head %}
+<!-- Tom Select: multi-select с поиском (Задача 1.4, CDN по паттерну проекта) -->
+<link href="/static/vendor/tom-select.default.min.css" rel="stylesheet">
+<script src="/static/vendor/tom-select.complete.min.js"></script>
+{% endblock %}
+
+{% block content %}
+<div class="grid-2">
+    <div>
+        <div class="card">
+            <div class="card-title"><span>🗺</span> Регион</div>
+            <div class="form-group" style="margin-bottom:0">
+                <label class="form-label">Область / регион для запроса</label>
+                <select class="form-control" id="region-select"></select>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-title"><span>⊞</span> Выбор индикаторов</div>
+            <div class="category-filters" id="category-filters" style="display:none"></div>
+            <div class="indicator-select-wrap">
+                <select id="indicator-select" multiple placeholder="Загрузка показателей..."></select>
+            </div>
+            <div id="indicators-loading" style="font-size:12px;color:var(--text-muted);margin-top:8px">
+                <span class="spinner" style="display:inline-block;vertical-align:middle;margin-right:6px"></span>
+                Загрузка каталога показателей...
+            </div>
+            <div id="indicators-error" style="display:none;font-size:12px;color:var(--accent-red);margin-top:8px"></div>
+        </div>
+
+        <div class="card">
+            <div class="card-title"><span>⚙</span> Дополнительно</div>
+            <div class="toggle-row">
+                <span class="toggle-label">Детализировать по районам СКО</span>
+                <label class="toggle-switch">
+                    <input type="checkbox" id="split-by-kato">
+                    <span class="toggle-slider"></span>
+                </label>
+            </div>
+            <p style="font-size:11px;color:var(--text-muted);margin-top:4px;line-height:1.5">
+                При включении данные запрашиваются отдельно по каждому району выбранной области
+                (<code>split_by_kato: true</code>).
+            </p>
+        </div>
+
+        <div class="card">
+            <div class="card-title"><span>📅</span> Период</div>
+            <div class="year-range">
+                <div class="form-group" style="margin-bottom:0">
+                    <label class="form-label">Год с</label>
+                    <input type="number" class="form-control" id="year-from" value="2010" min="2000" max="2024">
+                </div>
+                <div class="form-group" style="margin-bottom:0">
+                    <label class="form-label">Год по</label>
+                    <input type="number" class="form-control" id="year-to" value="2024" min="2000" max="2025">
+                </div>
+            </div>
+            <button class="btn btn-green" id="run-btn" style="width:100%;margin-top:16px" disabled onclick="runTaldau()">
+                ▶ Запустить dag_extract_taldau
+            </button>
+        </div>
+    </div>
+
+    <div>
+        <div class="status-block" id="status-block">
+            <div class="status-header"><div class="status-dot"></div><span id="status-title">Выполняется...</span></div>
+            <div class="status-message" id="status-message"></div>
+        </div>
+
+        <div class="card">
+            <div class="card-title"><span>ℹ</span> О Taldau API</div>
+            <div style="font-size:13px;color:var(--text-secondary);line-height:1.8">
+                Показатели загружаются динамически из каталога БД.<br><br>
+                Данные из Государственных баз данных и Комитета Статистики.<br><br>
+                <strong style="color:var(--text-muted)">Внимание:</strong> API нестабилен — при ошибке 404 или timeout DAG пропускает индикатор и продолжает работу.<br><br>
+                <a href="https://taldau.stat.gov.kz/ru/Api/Dev" target="_blank" style="color:var(--accent-blue);text-decoration:none">→ Документация API</a>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const REGIONS = [
+    { kato_code: '590000000', admin_code: '55', name: 'Северо-Казахстанская область (СКО)' },
+];
+
+const DIRECTION_TO_CATEGORY = {
+    social_demog: 'Демография',
+    economy:      'Экономика',
+    labor:        'Труд',
+    education:    'Образование',
+    health:       'Медицина',
+    climate:      'Климат',
+    ecology:      'Экология',
+    tourism:      'Туризм',
+    transport:    'Транспорт',
+    water:        'Водные ресурсы',
+};
+
+let indicatorTomSelect = null;
+let indicatorsCatalog  = [];
+let categoryById       = {};
+let activeCategory     = '';
+let polling            = null;
+
+function escapeHtml(s) {
+    return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function escapeAttr(s) {
+    return escapeHtml(s).replace(/'/g, '&#39;');
+}
+
+/**
+ * Категория/тег показателя для мультиселекта.
+ * TODO: когда backend начнёт отдавать поле `category` в GET /api/taldau-indicators,
+ * достаточно использовать ind.category — блок MOCK ниже можно удалить.
+ */
+function resolveCategory(ind) {
+    if (ind.category) return ind.category;
+    // MOCK: временная логика до появления category в ответе API
+    return DIRECTION_TO_CATEGORY[ind.direction] || 'Прочее';
+}
+
+function normalizeIndicator(ind) {
+    return {
+        id:        ind.id,
+        name:      ind.name,
+        direction: ind.direction,
+        unit:      ind.unit,
+        category:  resolveCategory(ind),
+    };
+}
+
+function initRegionSelect() {
+    const sel = document.getElementById('region-select');
+    sel.innerHTML = REGIONS.map(r =>
+        `<option value="${r.kato_code}" data-admin-code="${r.admin_code}">${r.name} (код ${r.admin_code})</option>`
+    ).join('');
+}
+
+function getSelectedRegion() {
+    const sel = document.getElementById('region-select');
+    const opt = sel.options[sel.selectedIndex];
+    return {
+        kato_code:  sel.value,
+        admin_code: opt ? opt.dataset.adminCode : '55',
+        name:       opt ? opt.textContent : 'СКО',
+    };
+}
+
+function buildCategoryFilters(categories) {
+    const wrap = document.getElementById('category-filters');
+    const sorted = [...categories].sort((a, b) => a.localeCompare(b, 'ru'));
+    wrap.innerHTML =
+        `<button type="button" class="category-chip active" data-category="">Все</button>` +
+        sorted.map(c =>
+            `<button type="button" class="category-chip" data-category="${escapeAttr(c)}">${escapeHtml(c)}</button>`
+        ).join('');
+    wrap.style.display = sorted.length ? 'flex' : 'none';
+
+    wrap.querySelectorAll('.category-chip').forEach(chip => {
+        chip.addEventListener('click', () => {
+            wrap.querySelectorAll('.category-chip').forEach(c => c.classList.remove('active'));
+            chip.classList.add('active');
+            activeCategory = chip.dataset.category || '';
+            rebuildTomSelect();
+        });
+    });
+}
+
+function getFilteredIndicators() {
+    if (!activeCategory) return indicatorsCatalog;
+    return indicatorsCatalog.filter(i => i.category === activeCategory);
+}
+
+function destroyTomSelect() {
+    if (indicatorTomSelect) {
+        indicatorTomSelect.destroy();
+        indicatorTomSelect = null;
+    }
+}
+
+function rebuildTomSelect() {
+    const selectEl = document.getElementById('indicator-select');
+    const prevSelected = indicatorTomSelect ? indicatorTomSelect.getValue() : [];
+    destroyTomSelect();
+
+    const filtered = getFilteredIndicators();
+    selectEl.innerHTML = filtered.map(ind =>
+        `<option value="${ind.id}">${ind.name}</option>`
+    ).join('');
+
+    indicatorTomSelect = new TomSelect('#indicator-select', {
+        plugins: ['remove_button'],
+        maxOptions: null,
+        placeholder: 'Начните вводить название показателя...',
+        hideSelected: false,
+        closeAfterSelect: false,
+        shouldLoad: (query) => query.trim().length >= 2,
+        load: (query, callback) => {
+            fetch('/upload/api/taldau-search?q=' + encodeURIComponent(query.trim()))
+                .then(r => r.json())
+                .then(data => {
+                    const results = (data.results || [])
+                        .filter(r => r.id != null && r.name)
+                        .map(r => ({ value: String(r.id), text: r.name, live: true }));
+                    callback(results);
+                })
+                .catch(() => callback());
+        },
+        render: {
+            option: (data, escape) => {
+                const cat = categoryById[data.value] || '';
+                const catBadge = cat
+                    ? `<span class="category-badge">${escape(cat)}</span>`
+                    : '';
+                const liveBadge = data.live
+                    ? `<span class="category-badge" style="background:rgba(255,180,0,.15);color:var(--accent-amber)" title="Найдено живым поиском Talдау - параметры запроса для этого показателя ещё не настроены, данные могут не загрузиться">⚠ не проверено</span>`
+                    : '';
+                return `<div class="ts-option-row"><span class="ts-option-name">${escape(data.text)}</span>${catBadge}${liveBadge}</div>`;
+            },
+            item: (data, escape) => {
+                const cat = categoryById[data.value] || '';
+                const badge = cat
+                    ? `<span class="category-badge category-badge-sm">${escape(cat)}</span>`
+                    : (data.live
+                        ? `<span class="category-badge category-badge-sm" style="background:rgba(255,180,0,.15);color:var(--accent-amber)">⚠</span>`
+                        : '');
+                return `<div class="ts-selected-item"><span>${escape(data.text)}</span>${badge}</div>`;
+            },
+        },
+    });
+
+    const validSelected = prevSelected.filter(id => filtered.some(i => String(i.id) === String(id)));
+    if (validSelected.length) indicatorTomSelect.setValue(validSelected, true);
+}
+
+async function loadIndicators() {
+    const loadingEl = document.getElementById('indicators-loading');
+    const errorEl   = document.getElementById('indicators-error');
+    const runBtn    = document.getElementById('run-btn');
+
+    try {
+        const resp = await fetch('/upload/api/taldau-indicators');
+        const data = await resp.json();
+        if (!resp.ok || !data.success) {
+            throw new Error(data.detail || 'Не удалось загрузить показатели');
+        }
+
+        indicatorsCatalog = (data.indicators || []).map(normalizeIndicator);
+        categoryById = Object.fromEntries(indicatorsCatalog.map(i => [String(i.id), i.category]));
+
+        const categories = [...new Set(indicatorsCatalog.map(i => i.category))];
+        buildCategoryFilters(categories);
+        rebuildTomSelect();
+
+        loadingEl.style.display = 'none';
+        runBtn.disabled = false;
+    } catch (e) {
+        loadingEl.style.display = 'none';
+        errorEl.style.display = 'block';
+        errorEl.textContent = 'Ошибка загрузки показателей: ' + e.message;
+    }
+}
+
+async function runTaldau() {
+    const ids = indicatorTomSelect ? indicatorTomSelect.getValue().map(v => parseInt(v, 10)) : [];
+    if (!ids.length) { showToast('Выберите хотя бы один индикатор', 'warning'); return; }
+
+    const indicatorNames = {};
+    if (indicatorTomSelect) {
+        ids.forEach(id => {
+            const opt = indicatorTomSelect.options[String(id)];
+            if (opt && opt.text) indicatorNames[id] = opt.text;
+        });
+    }
+    // Задача 1.3: валидация диапазона периодов
+    const yFrom = parseInt(document.getElementById('year-from').value, 10);
+    const yTo   = parseInt(document.getElementById('year-to').value, 10);
+    if (isNaN(yFrom) || isNaN(yTo)) {
+        showToast('Укажите корректные годы (год с / год по)', 'warning'); return;
+    }
+    if (yFrom > yTo) {
+        showToast('«Год с» не может быть больше «Год по» — исправьте диапазон', 'warning'); return;
+    }
+    if (yFrom < 2000 || yTo > 2025) {
+        showToast('Данные Талдау доступны за 2000–2025 годы', 'warning'); return;
+    }
+
+    const splitByKato = document.getElementById('split-by-kato').checked;
+    const region = getSelectedRegion();
+    document.getElementById('run-btn').disabled = true;
+    showStatus('running',
+        `Запускаю dag_extract_taldau для ${ids.length} индикаторов` +
+        ` · ${region.name}` +
+        `${splitByKato ? ' (по районам)' : ''}...`);
+
+    try {
+        const resp = await fetch('/upload/api/taldau/run', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                index_ids: ids,
+                year_from: parseInt(document.getElementById('year-from').value, 10),
+                year_to:   parseInt(document.getElementById('year-to').value, 10),
+                split_by_kato: splitByKato,
+                kato_region_code: region.kato_code,
+                indicator_names: indicatorNames,
+            })
+        });
+        const data = await resp.json();
+        if (!resp.ok || !data.success) {
+            showStatus('error', data.detail || data.message || 'Ошибка');
+            resetBtn();
+            return;
+        }
+        pollDag(data.dag_id, data.dag_run_id);
+    } catch (e) {
+        showStatus('error', 'Сетевая ошибка: ' + e.message);
+        resetBtn();
+    }
+}
+
+function pollDag(dagId, dagRunId) {
+    polling = setInterval(async () => {
+        try {
+            const resp = await fetch(`/upload/api/dag-status/${dagId}/${encodeURIComponent(dagRunId)}`);
+            const data = await resp.json();
+            const state = data.state || 'unknown';
+            const msgs = {
+                running: 'DAG выполняется...',
+                success: 'Данные получены! Автоматически запускается dag_build_excel — '
+                       + 'готовый файл появится в разделе <a href="/upload/files" '
+                       + 'style="color:var(--accent-blue)">Готовые файлы</a> через '
+                       + 'несколько секунд.',
+                failed:  'DAG завершился с ошибкой.',
+                queued:  'В очереди Airflow...'
+            };
+            const isHtml = state === 'success';
+            showStatus(state === 'failed' ? 'error' : state, msgs[state] || state, isHtml);
+            if (['success', 'failed'].includes(state)) { clearInterval(polling); resetBtn(); }
+        } catch (e) {}
+    }, 3000);
+}
+
+function showStatus(status, message, isHtml) {
+    const sb = document.getElementById('status-block');
+    sb.className = `status-block visible ${status}`;
+    const titles = { running: 'Выполняется...', success: 'Готово!', error: 'Ошибка', queued: 'В очереди' };
+    document.getElementById('status-title').textContent = titles[status] || status;
+    const el = document.getElementById('status-message');
+    if (isHtml) el.innerHTML = message;
+    else el.textContent = message;
+}
+
+function resetBtn() {
+    document.getElementById('run-btn').disabled = false;
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+    initRegionSelect();
+    loadIndicators();
+});
+</script>
+{% endblock %}
