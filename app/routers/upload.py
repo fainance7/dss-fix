@@ -1,6 +1,8 @@
 # app/routers/upload.py
 
 import os
+import threading
+import time
 import httpx
 import psycopg2
 from datetime import datetime
@@ -65,16 +67,32 @@ def get_dag_run_status(dag_id: str, dag_run_id: str) -> dict:
         return {"state": "unknown"}
 
 
+# НТ-1: история запусков нужна главной странице и /api/history при каждом открытии;
+# короткий кеш снимает с Airflow повторные одинаковые запросы под нагрузкой.
+_RUNS_TTL_S = float(os.environ.get("ETL_DAG_RUNS_CACHE_S", "5"))
+_runs_cache: dict[tuple[str, int], tuple[float, list]] = {}
+_runs_lock = threading.Lock()
+
+
 def get_recent_dag_runs(dag_id: str, limit: int = 5) -> list:
-    """Возвращает последние запуски DAG."""
+    """Возвращает последние запуски DAG (с кешем на ETL_DAG_RUNS_CACHE_S секунд)."""
+    key = (dag_id, limit)
+    now = time.monotonic()
+    with _runs_lock:
+        hit = _runs_cache.get(key)
+        if hit and hit[0] > now:
+            return hit[1]
     url = f"{AIRFLOW_URL}/api/v1/dags/{dag_id}/dagRuns?limit={limit}&order_by=-execution_date"
     try:
         resp = httpx.get(url, auth=(AIRFLOW_USER, AIRFLOW_PASS), timeout=10)
         if resp.status_code != 200:
             return []
-        return resp.json().get("dag_runs", [])
+        runs = resp.json().get("dag_runs", [])
     except httpx.HTTPError:
         return []
+    with _runs_lock:
+        _runs_cache[key] = (now + _RUNS_TTL_S, runs)
+    return runs
 
 
 def get_task_instances(dag_id: str, dag_run_id: str) -> list:
