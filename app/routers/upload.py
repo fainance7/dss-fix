@@ -174,41 +174,40 @@ async def upload_index(request: Request):
         "failed":  sum(1 for r in history if r["state"] == "failed"),
         "running": sum(1 for r in history if r["state"] in ("running", "queued")),
     }
-    return templates.TemplateResponse("upload/index.html",
-                                      {"request": request, "history": history[:10], "stats": stats})
+    return templates.TemplateResponse(request, "upload/index.html", { "history": history[:10], "stats": stats})
 
 
 @router.get("/manual", response_class=HTMLResponse)
 async def upload_manual(request: Request):
     """Страница ручной загрузки файлов."""
-    return templates.TemplateResponse("upload/manual.html", {"request": request})
+    return templates.TemplateResponse(request, "upload/manual.html", {})
 
 
 @router.get("/taldau", response_class=HTMLResponse)
 async def upload_taldau(request: Request):
     """Страница запуска Taldau + Гос. API."""
-    return templates.TemplateResponse("upload/taldau.html", {"request": request})
+    return templates.TemplateResponse(request, "upload/taldau.html", {})
 
 
 @router.get("/climate", response_class=HTMLResponse)
 async def upload_climate(request: Request):
     """Страница запуска Climate API (Open-Meteo)."""
-    return templates.TemplateResponse("upload/climate.html", {"request": request})
+    return templates.TemplateResponse(request, "upload/climate.html", {})
 
 
 @router.get("/files", response_class=HTMLResponse)
 async def upload_files(request: Request):
     """Страница со списком готовых DSS Excel файлов."""
-    return templates.TemplateResponse("upload/files.html", {"request": request})
+    return templates.TemplateResponse(request, "upload/files.html", {})
 
 
 @router.get("/agromap", response_class=HTMLResponse)
 async def agromap_page(request: Request):
-    return templates.TemplateResponse("upload/agromap.html", {"request": request})
+    return templates.TemplateResponse(request, "upload/agromap.html", {})
 
 @router.get("/legal", response_class=HTMLResponse)
 async def legal_page(request: Request):
-    return templates.TemplateResponse("upload/legal.html", {"request": request})
+    return templates.TemplateResponse(request, "upload/legal.html", {})
 
 
 @router.post("/api/manual/upload")

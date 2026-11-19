@@ -17,7 +17,7 @@ EGOV_API_KEY = os.environ.get("EGOV_API_KEY")
 # разными ФИО директора под одним id (проверено на Казахтелекоме).
 # Возврат на dadata — одна строка в .env + docker compose up -d fastapi,
 # код трогать не нужно.
-LEGAL_ENTITY_SOURCE = os.environ.get("LEGAL_ENTITY_SOURCE", "dadata").strip().lower()
+LEGAL_ENTITY_SOURCE = os.environ.get("LEGAL_ENTITY_SOURCE", "egov").strip().lower()  # по умолчанию data.egov.kz: данные не передаются за пределы РК
 
 
 async def _search_dadata(q: str) -> list[dict]:

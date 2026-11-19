@@ -1,0 +1,9 @@
+# У-15: тестовые данные и вспомогательные скрипты не попадают в промышленный образ
+testfiles/
+dirtytests/
+tests/
+diag.py
+rundirty.py
+runtests.py
+__pycache__/
+*.pyc

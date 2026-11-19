@@ -179,6 +179,12 @@ def sync_gdrive(**context):
     fallback_direction_override = conf.get("direction_code")
     force_resync = bool(conf.get("force_resync", False))
 
+    # Передача данных во внешний сервис за пределами РК отключена по умолчанию;
+    # включается только явным решением владельца системы (GDRIVE_SYNC_ENABLED=true).
+    if os.environ.get("GDRIVE_SYNC_ENABLED", "false").strip().lower() != "true":
+        from airflow.exceptions import AirflowSkipException
+        raise AirflowSkipException("Синхронизация с Google Drive отключена (GDRIVE_SYNC_ENABLED != true)")
+
     if not Path(GDRIVE_KEY_PATH).exists():
         raise ValueError(
             f"Ключ Service Account не найден по пути {GDRIVE_KEY_PATH}. "

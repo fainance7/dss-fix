@@ -4,10 +4,13 @@ import time
 
 import httpx
 from fastapi import HTTPException, Request
-from jose import JWTError, jwt
+import jwt  # PyJWT (Р-9: python-jose заменена)
+from jwt import InvalidTokenError as JWTError
 
 JWT_SECRET_KEY = os.environ.get("JWT_SECRET_KEY")
 JWT_ALGORITHM = os.environ.get("JWT_ALGORITHM", "HS256")
+if JWT_ALGORITHM not in ("HS256", "HS384", "HS512"):
+    raise RuntimeError("JWT_ALGORITHM must be one of HS256/HS384/HS512")
 SSO_COOKIE_NAME = "dss_session"
 DSS_BACKEND_URL = os.environ.get("DSS_BACKEND_URL", "http://dss-backend:8000")
 

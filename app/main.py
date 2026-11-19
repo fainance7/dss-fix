@@ -3,6 +3,7 @@ from fastapi.security import APIKeyHeader
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import RedirectResponse
 import os
+import secrets
 import urllib.parse
 from routers import files, triggers, dss, agromap, legal_entity
 from routers.upload import router as upload_router
@@ -17,7 +18,8 @@ if not API_KEY:
 api_key_header = APIKeyHeader(name="X-API-Key")
 
 def verify_api_key(key: str = Security(api_key_header)):
-    if not key or key != API_KEY:
+    # У-14: сравнение за постоянное время
+    if not key or not secrets.compare_digest(key.encode(), API_KEY.encode()):
         raise HTTPException(status_code=403, detail="Invalid API Key")
     return key
 
