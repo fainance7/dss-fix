@@ -67,32 +67,51 @@ def get_dag_run_status(dag_id: str, dag_run_id: str) -> dict:
         return {"state": "unknown"}
 
 
-# НТ-1: история запусков нужна главной странице и /api/history при каждом открытии;
+# НТ-1/НТ-4: история запусков нужна главной странице и /api/history при каждом открытии;
 # короткий кеш снимает с Airflow повторные одинаковые запросы под нагрузкой.
+# Обновление однопоточное (single-flight): при истечении срока к Airflow идёт один запрос
+# на ключ, остальные ждут его результат; при ошибке Airflow отдаётся последнее значение.
 _RUNS_TTL_S = float(os.environ.get("ETL_DAG_RUNS_CACHE_S", "5"))
 _runs_cache: dict[tuple[str, int], tuple[float, list]] = {}
 _runs_lock = threading.Lock()
+_runs_key_locks: dict[tuple[str, int], threading.Lock] = {}
+
+
+def _fetch_dag_runs(dag_id: str, limit: int) -> list | None:
+    url = f"{AIRFLOW_URL}/api/v1/dags/{dag_id}/dagRuns?limit={limit}&order_by=-execution_date"
+    try:
+        resp = httpx.get(url, auth=(AIRFLOW_USER, AIRFLOW_PASS), timeout=10)
+        if resp.status_code != 200:
+            return None
+        return resp.json().get("dag_runs", [])
+    except (httpx.HTTPError, ValueError):
+        return None
 
 
 def get_recent_dag_runs(dag_id: str, limit: int = 5) -> list:
     """Возвращает последние запуски DAG (с кешем на ETL_DAG_RUNS_CACHE_S секунд)."""
     key = (dag_id, limit)
-    now = time.monotonic()
     with _runs_lock:
         hit = _runs_cache.get(key)
-        if hit and hit[0] > now:
+        if hit and hit[0] > time.monotonic():
             return hit[1]
-    url = f"{AIRFLOW_URL}/api/v1/dags/{dag_id}/dagRuns?limit={limit}&order_by=-execution_date"
-    try:
-        resp = httpx.get(url, auth=(AIRFLOW_USER, AIRFLOW_PASS), timeout=10)
-        if resp.status_code != 200:
-            return []
-        runs = resp.json().get("dag_runs", [])
-    except httpx.HTTPError:
-        return []
-    with _runs_lock:
-        _runs_cache[key] = (now + _RUNS_TTL_S, runs)
-    return runs
+        key_lock = _runs_key_locks.setdefault(key, threading.Lock())
+    with key_lock:
+        # пока ждали блокировку, значение мог обновить другой поток
+        with _runs_lock:
+            hit = _runs_cache.get(key)
+            if hit and hit[0] > time.monotonic():
+                return hit[1]
+        runs = _fetch_dag_runs(dag_id, limit)
+        with _runs_lock:
+            if runs is None:
+                if hit:
+                    # Airflow недоступен: продлеваем последнее значение, не повторяя запрос каждым потоком
+                    _runs_cache[key] = (time.monotonic() + _RUNS_TTL_S, hit[1])
+                    return hit[1]
+                return []
+            _runs_cache[key] = (time.monotonic() + _RUNS_TTL_S, runs)
+        return runs
 
 
 def get_task_instances(dag_id: str, dag_run_id: str) -> list:
