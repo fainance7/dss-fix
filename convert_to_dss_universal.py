@@ -42,7 +42,7 @@ sys.path.insert(0, str(Path(__file__).parent / "etl"))
 
 from universal_detector import IndicatorCatalog, convert_file  # noqa: E402
 
-DB_CONN = os.environ.get("REPORTS_DB_DSN", "host=localhost port=5432 dbname=reports_db user=aldis password=CHANGE_ME")
+DB_CONN = os.environ["REPORTS_DB_DSN"]  # M-3: required, no insecure default
 
 # Папка с исходными xlsx-файлами для конвертации.
 # По умолчанию — рядом со скриптом (т.е. /tmp при запуске по инструкции выше).

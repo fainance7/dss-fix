@@ -11,7 +11,7 @@ import pandas as pd
 import psycopg2
 from pathlib import Path
 
-DB_CONN = os.environ.get("REPORTS_DB_DSN", "host=localhost port=5432 dbname=reports_db user=aldis password=CHANGE_ME")
+DB_CONN = os.environ["REPORTS_DB_DSN"]  # M-3: required, no insecure default
 
 # Файлы для загрузки — добавляй сюда свои файлы
 FILES = [

@@ -4,9 +4,12 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
 router  = APIRouter()
+# H-5: Airflow pass — only from env, fail-fast. No insecure defaults.
 AF_URL  = os.environ.get("AIRFLOW_URL", "http://airflow-webserver:8080")
-AF_USER = "admin"
-AF_PASS = os.environ.get("AIRFLOW_ADMIN_PASSWORD", os.environ.get("AIRFLOW_ADMIN_PASSWORD", "CHANGE_ME"))
+AF_USER = os.environ.get("AIRFLOW_USER", "admin")
+AF_PASS = os.environ.get("AIRFLOW_ADMIN_PASSWORD")
+if not AF_PASS:
+    *** RuntimeError("AIRFLOW_ADMIN_PASSWORD must be set (audit H-5: no insecure default)")
 
 class TriggerRequest(BaseModel):
     conf: dict = {}

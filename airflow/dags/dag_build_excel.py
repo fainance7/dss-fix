@@ -6,7 +6,7 @@ from datetime import datetime, timedelta
 from airflow import DAG
 from airflow.operators.python import PythonOperator
 
-DB_CONN      = os.environ.get("REPORTS_DB_URL", "postgresql+psycopg2://aldis:CHANGE_ME@postgres/reports_db")
+DB_CONN      = os.environ["REPORTS_DB_URL"]  # M-3: required, no insecure default
 ARTIFACT_DIR = "/opt/airflow/artifacts"
 
 sys.path.insert(0, "/opt/airflow/etl")

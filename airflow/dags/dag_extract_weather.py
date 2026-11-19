@@ -33,7 +33,7 @@ STATIONS = [
 ]
 
 OPENMETEO_URL = "https://archive-api.open-meteo.com/v1/archive"
-DB_CONN = os.environ.get("REPORTS_DB_URL", "postgresql+psycopg2://aldis:CHANGE_ME@postgres/reports_db")
+DB_CONN = os.environ["REPORTS_DB_URL"]  # M-3: required, no insecure default
 
 # Open-Meteo рубит запросы 429-кой почти сразу без паузы между вызовами —
 # добавлена базовая задержка + повтор с нарастающей паузой именно для 429.

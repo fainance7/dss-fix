@@ -44,7 +44,7 @@ from airflow.operators.trigger_dagrun import TriggerDagRunOperator
 from sqlalchemy import create_engine
 import json
 
-DB_CONN = os.environ.get("REPORTS_DB_URL", "postgresql+psycopg2://aldis:CHANGE_ME@postgres/reports_db")
+DB_CONN = os.environ["REPORTS_DB_URL"]  # M-3: required, no insecure default
 
 # Без этого заголовка stat.gov.kz отдаёт 404 на все страницы — подтверждено
 # эмпирически (curl без -A падал, curl с -A "Mozilla/5.0..." работал).

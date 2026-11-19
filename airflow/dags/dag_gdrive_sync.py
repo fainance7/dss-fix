@@ -48,7 +48,7 @@ from airflow.operators.python import PythonOperator
 from airflow.operators.trigger_dagrun import TriggerDagRunOperator
 from sqlalchemy import create_engine
 
-DB_CONN = os.environ.get("REPORTS_DB_URL", "postgresql+psycopg2://aldis:CHANGE_ME@postgres/reports_db")
+DB_CONN = os.environ["REPORTS_DB_URL"]  # M-3: required, no insecure default
 GDRIVE_KEY_PATH = "/opt/airflow/etl/gdrive_service_account.json"
 
 # Папки, переданные владельцем (см. "Перечень собранных первичных

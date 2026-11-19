@@ -46,13 +46,15 @@ from fastapi.responses import StreamingResponse
 router = APIRouter()
 
 # ── подключения (берём из env как во всём проекте) ──────────────────────────
-DB_CONN = os.environ.get(
-    "DB_CONN",
-    os.environ.get("REPORTS_DB_DSN", "host=postgres port=5432 dbname=reports_db user=aldis password=CHANGE_ME")
-)
+# H-5: secrets (DSN, Airflow pass) — only from env, fail-fast. No insecure defaults.
+DB_CONN = os.environ.get("DB_CONN") or os.environ.get("REPORTS_DB_DSN")
+if not DB_CONN:
+    *** RuntimeError("DB_CONN or REPORTS_DB_DSN must be set (audit H-5: no insecure default)")
 AF_URL  = os.environ.get("AIRFLOW_URL", "http://airflow-webserver:8080")
-AF_USER = "admin"
-AF_PASS = os.environ.get("AIRFLOW_ADMIN_PASSWORD", os.environ.get("AIRFLOW_ADMIN_PASSWORD", "CHANGE_ME"))
+AF_USER = os.environ.get("AIRFLOW_USER", "admin")
+AF_PASS = os.environ.get("AIRFLOW_ADMIN_PASSWORD")
+if not AF_PASS:
+    *** RuntimeError("AIRFLOW_ADMIN_PASSWORD must be set (audit H-5: no insecure default)")
 
 ARTIFACTS_DIR = Path(os.environ.get("ARTIFACTS_DIR", "/app/artifacts"))
 

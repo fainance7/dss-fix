@@ -54,7 +54,7 @@ KU = {
 }
 import pandas as pd
 from sqlalchemy import create_engine
-eng = create_engine(os.environ.get("REPORTS_DB_URL", "postgresql+psycopg2://aldis:CHANGE_ME@postgres/reports_db"))
+eng = create_engine(os.environ["REPORTS_DB_URL"]  # M-3: required, no insecure default)
 rows = []
 for ind, tbl in [("Гидротермический коэффициент (ГТК)", GTK),
                  ("Коэффициент увлажнения (K)", KU)]:

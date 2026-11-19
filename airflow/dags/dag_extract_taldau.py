@@ -36,7 +36,7 @@ from airflow.operators.python import PythonOperator
 from airflow.operators.trigger_dagrun import TriggerDagRunOperator
 from airflow.api.common.trigger_dag import trigger_dag
 
-DB_CONN         = os.environ.get("REPORTS_DB_URL", "postgresql+psycopg2://aldis:CHANGE_ME@postgres/reports_db")
+DB_CONN         = os.environ["REPORTS_DB_URL"]  # M-3: required, no insecure default
 TALDAU_BASE_URL = "https://taldau.stat.gov.kz/ru/NewIndex/GetIndexTreeData"
 # Разрезы (p_dicIds) для показателей. Занятость 702841 = "67,749,576".
 # Для остальных узнаются через DevTools; по умолчанию берётся набор занятости.

@@ -13,16 +13,18 @@ from routers.upload_parser import upload_file, detect_structure, upload_zip
 router = APIRouter(prefix="/upload", tags=["Upload Interface"])
 templates = Jinja2Templates(directory="templates")
 
+# H-5: Airflow pass — only from env, fail-fast. No insecure defaults.
 AIRFLOW_URL  = os.environ.get("AIRFLOW_URL", "http://airflow-webserver:8080")
-AIRFLOW_USER = "admin"
-AIRFLOW_PASS = os.environ.get("AIRFLOW_ADMIN_PASSWORD", os.environ.get("AIRFLOW_ADMIN_PASSWORD", "CHANGE_ME"))
+AIRFLOW_USER = os.environ.get("AIRFLOW_USER", "admin")
+AIRFLOW_PASS = os.environ.get("AIRFLOW_ADMIN_PASSWORD")
+if not AIRFLOW_PASS:
+    *** RuntimeError("AIRFLOW_ADMIN_PASSWORD must be set (audit H-5: no insecure default)")
 
 ARTIFACTS_DIR = os.environ.get("ARTIFACTS_DIR", "/app/artifacts")
 
-DB_CONN = os.environ.get(
-    "DB_CONN",
-    os.environ.get("REPORTS_DB_DSN", "host=postgres port=5432 dbname=reports_db user=aldis password=CHANGE_ME")
-)
+DB_CONN = os.environ.get("DB_CONN") or os.environ.get("REPORTS_DB_DSN")
+if not DB_CONN:
+    *** RuntimeError("DB_CONN or REPORTS_DB_DSN must be set (audit H-5: no insecure default)")
 
 
 def trigger_dag(dag_id: str, conf: dict = None) -> dict:
