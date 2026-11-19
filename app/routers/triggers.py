@@ -9,7 +9,7 @@ AF_URL  = os.environ.get("AIRFLOW_URL", "http://airflow-webserver:8080")
 AF_USER = os.environ.get("AIRFLOW_USER", "admin")
 AF_PASS = os.environ.get("AIRFLOW_ADMIN_PASSWORD")
 if not AF_PASS:
-    *** RuntimeError("AIRFLOW_ADMIN_PASSWORD must be set (audit H-5: no insecure default)")
+    raise RuntimeError("AIRFLOW_ADMIN_PASSWORD must be set (audit H-5: no insecure default)")
 
 class TriggerRequest(BaseModel):
     conf: dict = {}

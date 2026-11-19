@@ -18,13 +18,13 @@ AIRFLOW_URL  = os.environ.get("AIRFLOW_URL", "http://airflow-webserver:8080")
 AIRFLOW_USER = os.environ.get("AIRFLOW_USER", "admin")
 AIRFLOW_PASS = os.environ.get("AIRFLOW_ADMIN_PASSWORD")
 if not AIRFLOW_PASS:
-    *** RuntimeError("AIRFLOW_ADMIN_PASSWORD must be set (audit H-5: no insecure default)")
+    raise RuntimeError("AIRFLOW_ADMIN_PASSWORD must be set (audit H-5: no insecure default)")
 
 ARTIFACTS_DIR = os.environ.get("ARTIFACTS_DIR", "/app/artifacts")
 
 DB_CONN = os.environ.get("DB_CONN") or os.environ.get("REPORTS_DB_DSN")
 if not DB_CONN:
-    *** RuntimeError("DB_CONN or REPORTS_DB_DSN must be set (audit H-5: no insecure default)")
+    raise RuntimeError("DB_CONN or REPORTS_DB_DSN must be set (audit H-5: no insecure default)")
 
 
 def trigger_dag(dag_id: str, conf: dict = None) -> dict:
