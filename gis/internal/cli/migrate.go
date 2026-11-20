@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"os"
 
 	"gis/internal/config"
 	"gis/migrations"
@@ -46,6 +47,11 @@ var migrateCmd = &cobra.Command{
 
 		command := args[0]
 		if command == "fresh" {
+			// Destructive: drops the whole schema. Requires an explicit opt-in so a
+			// mistyped command or wrong DB_URL cannot wipe production data.
+			if os.Getenv("GIS_ALLOW_MIGRATE_FRESH") != "true" {
+				return fmt.Errorf("migrate fresh drops schema %q: set GIS_ALLOW_MIGRATE_FRESH=true to confirm (never in production)", cfg.DB.Schema)
+			}
 			return migrateFresh(cmd.Context(), db, cfg.DB.Schema)
 		}
 		return goose.RunContext(cmd.Context(), command, db, ".", args[1:]...)
@@ -56,10 +62,14 @@ var migrateCmd = &cobra.Command{
 // version table) and re-applies all migrations. This is a destructive
 // development convenience, equivalent to "drop everything and rerun".
 func migrateFresh(ctx context.Context, db *sql.DB, schema string) error {
-	// Identifiers cannot be parameterized, so quote the schema name to guard
-	// against injection and to handle non-lowercase/special identifiers.
+	// H-4: identifiers cannot be bound as SQL parameters, so the schema name is
+	// quoted with pgx.Identifier.Sanitize() — it wraps the value in double
+	// quotes and escapes any embedded quotes (PG identifier-quoting rules),
+	// which neutralises injection and handles mixed-case/special identifiers.
+	// We build the statement by concatenation, not fmt.Sprintf, so the
+	// sanitised identifier is the only value that ever reaches the SQL string.
 	quoted := pgx.Identifier{schema}.Sanitize()
-	stmt := fmt.Sprintf(`DROP SCHEMA IF EXISTS %s CASCADE; CREATE SCHEMA %s;`, quoted, quoted)
+	stmt := "DROP SCHEMA IF EXISTS " + quoted + " CASCADE; CREATE SCHEMA " + quoted + ";"
 	if _, err := db.ExecContext(ctx, stmt); err != nil {
 		return fmt.Errorf("reset schema %q: %w", schema, err)
 	}

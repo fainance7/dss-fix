@@ -126,6 +126,8 @@ func (a *App) Handler() stdhttp.Handler {
 		DatasetGroups: transporthttp.NewDatasetGroupHandler(a.groups, validate),
 		Landscape:     transporthttp.NewLandscapeHandler(a.landscape, validate),
 		OpenAPISpec:   api.Spec,
+		APIKey:        a.Cfg.HTTP.APIKey,
+		AuthDisabled:  a.Cfg.HTTP.AuthDisabled,
 	})
 }
 

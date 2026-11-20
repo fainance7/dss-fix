@@ -27,6 +27,33 @@ type HTTPConfig struct {
 	WriteTimeout      time.Duration `env:"HTTP_WRITE_TIMEOUT" envDefault:"120s"`
 	IdleTimeout       time.Duration `env:"HTTP_IDLE_TIMEOUT" envDefault:"60s"`
 	ShutdownTimeout   time.Duration `env:"HTTP_SHUTDOWN_TIMEOUT" envDefault:"10s"`
+
+	// APIKey is the shared-secret key clients must present in the X-API-Key
+	// header on every non-health endpoint. Required (>=32 chars) unless
+	// AuthDisabled is set explicitly for local development.
+	APIKey string `env:"API_KEY"`
+	// AuthDisabled turns API-key auth off. Local development only; it must
+	// never be set in a shared or production deployment (audit C-2).
+	AuthDisabled bool `env:"API_AUTH_DISABLED" envDefault:"false"`
+}
+
+// MinAPIKeyLen is the minimum accepted length of API_KEY.
+const MinAPIKeyLen = 32
+
+// ValidateAuth fails fast when the HTTP API would start without
+// authentication (audit C-2): an empty API_KEY is an error unless
+// API_AUTH_DISABLED=true was set on purpose.
+func (c HTTPConfig) ValidateAuth() error {
+	if c.AuthDisabled {
+		return nil
+	}
+	if c.APIKey == "" {
+		return fmt.Errorf("API_KEY is not set: refusing to serve an unauthenticated API (set API_KEY, or API_AUTH_DISABLED=true for local dev only)")
+	}
+	if len(c.APIKey) < MinAPIKeyLen {
+		return fmt.Errorf("API_KEY is too short: need at least %d characters", MinAPIKeyLen)
+	}
+	return nil
 }
 
 // Addr returns the listen address for the HTTP server.

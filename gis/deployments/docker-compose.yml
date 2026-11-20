@@ -4,15 +4,21 @@ x-app-common: &app-common
     dockerfile: build/package/Dockerfile
   environment: &app-environment
     PORT: 8080
-    DB_URL: postgres://gis:gis@postgres:5432/gis?sslmode=disable
+    DB_URL: postgres://gis:${GIS_DB_PASSWORD:?GIS_DB_PASSWORD must be set in deployments/.env (audit C-2)}@postgres:5432/gis?sslmode=disable
     S3_ENDPOINT: minio:9000
-    S3_ACCESS_KEY: minioadmin
-    S3_SECRET_KEY: minioadmin
+    # Secrets (audit C-2/L-1): no defaults — compose refuses to start until they
+    # are set in deployments/.env (see deployments/.env.example).
+    S3_ACCESS_KEY: ${S3_ACCESS_KEY:?S3_ACCESS_KEY must be set in deployments/.env (audit C-2/L-1)}
+    S3_SECRET_KEY: ${S3_SECRET_KEY:?S3_SECRET_KEY must be set in deployments/.env (audit C-2/L-1)}
     S3_BUCKET: geofiles
     S3_USE_SSL: "false"
-    RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672/
+    RABBITMQ_URL: amqp://${RABBITMQ_DEFAULT_USER:?RABBITMQ_DEFAULT_USER must be set}:${RABBITMQ_DEFAULT_PASS:?RABBITMQ_DEFAULT_PASS must be set}@rabbitmq:5672/
     RABBITMQ_EXCHANGE: gis.events
     RABBITMQ_QUEUE: gis.events.example
+    # API auth (audit C-2): required, >=32 chars. API_AUTH_DISABLED=true is for
+    # a developer laptop only and is logged as a warning at startup.
+    API_KEY: ${API_KEY:?API_KEY must be set (>=32 chars, audit C-2)}
+    API_AUTH_DISABLED: ${API_AUTH_DISABLED:-false}
   depends_on:
     postgres:
       condition: service_healthy
@@ -47,10 +53,10 @@ services:
     image: postgis/postgis:17-3.5
     environment:
       POSTGRES_USER: gis
-      POSTGRES_PASSWORD: gis
+      POSTGRES_PASSWORD: ${GIS_DB_PASSWORD:?GIS_DB_PASSWORD must be set in deployments/.env (audit C-2)}
       POSTGRES_DB: gis
     ports:
-      - "${DB_PORT:-5432}:5432"
+      - "127.0.0.1:${DB_PORT:-5432}:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
@@ -64,11 +70,12 @@ services:
     image: minio/minio:latest
     command: server /data --console-address ":9001"
     ports:
-      - "9000:9000"
-      - "9001:9001"
+      - "127.0.0.1:9000:9000"
+      - "127.0.0.1:9001:9001"
     environment:
-      MINIO_ROOT_USER: minioadmin
-      MINIO_ROOT_PASSWORD: minioadmin
+      # Root credentials = the app's S3 keys; no defaults (audit C-2/L-1).
+      MINIO_ROOT_USER: ${S3_ACCESS_KEY:?S3_ACCESS_KEY must be set (audit C-2/L-1)}
+      MINIO_ROOT_PASSWORD: ${S3_SECRET_KEY:?S3_SECRET_KEY must be set (audit C-2/L-1)}
     volumes:
       - minio_data:/data
     healthcheck:
@@ -81,11 +88,12 @@ services:
   rabbitmq:
     image: rabbitmq:3-management
     ports:
-      - "5672:5672"
-      - "15672:15672"
+      - "127.0.0.1:5672:5672"
+      - "127.0.0.1:15672:15672"
     environment:
-      RABBITMQ_DEFAULT_USER: guest
-      RABBITMQ_DEFAULT_PASS: guest
+      # No default credentials (audit C-2). Ports bound to 127.0.0.1 only.
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_DEFAULT_USER:?RABBITMQ_DEFAULT_USER must be set (audit C-2)}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_DEFAULT_PASS:?RABBITMQ_DEFAULT_PASS must be set (audit C-2)}
     volumes:
       - rabbitmq_data:/var/lib/rabbitmq
     healthcheck:
