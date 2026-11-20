@@ -19,6 +19,10 @@ x-app-common: &app-common
     # a developer laptop only and is logged as a warning at startup.
     API_KEY: ${API_KEY:?API_KEY must be set (>=32 chars, audit C-2)}
     API_AUTH_DISABLED: ${API_AUTH_DISABLED:-false}
+    # API documentation (/docs, /openapi.yaml) without a key — off by default (Этап 7).
+    API_DOCS_ENABLED: ${API_DOCS_ENABLED:-false}
+    # Largest raster accepted for processing, width×height (Этап 7).
+    GIS_RASTER_MAX_PIXELS: ${GIS_RASTER_MAX_PIXELS:-1000000000}
   depends_on:
     postgres:
       condition: service_healthy
@@ -26,6 +30,8 @@ x-app-common: &app-common
       condition: service_healthy
     rabbitmq:
       condition: service_healthy
+  # Memory cap per container (Этап 7): a hostile file must not take the host.
+  mem_limit: ${GIS_MEM_LIMIT:-2g}
   restart: unless-stopped
 
 services:
