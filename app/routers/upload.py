@@ -67,6 +67,17 @@ def get_dag_run_status(dag_id: str, dag_run_id: str) -> dict:
         return {"state": "unknown"}
 
 
+async def _json_body(request: Request) -> dict:
+    """Тело запроса JSON-объектом; некорректный JSON — 400, а не внутренняя ошибка 500 (Этап 7)."""
+    try:
+        data = await request.json()
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Некорректный JSON в теле запроса")
+    if not isinstance(data, dict):
+        raise HTTPException(status_code=400, detail="Тело запроса должно быть JSON-объектом")
+    return data
+
+
 # НТ-1/НТ-4: история запусков нужна главной странице и /api/history при каждом открытии;
 # короткий кеш снимает с Airflow повторные одинаковые запросы под нагрузкой.
 # Обновление однопоточное (single-flight): при истечении срока к Airflow идёт один запрос
@@ -346,7 +357,7 @@ async def api_taldau_run(request: Request):
     блокировался ожиданием этой доработки — когда регион появится в
     реальных данных, нужно будет доработать DAG, не трогая фронт.
     """
-    data            = await request.json()
+    data            = await _json_body(request)
     index_ids       = data.get("index_ids", [])
     year_from, year_to = _years(data.get("year_from", 2010), data.get("year_to", datetime.now().year))
     if not isinstance(index_ids, list) or len(index_ids) > 200:
@@ -515,7 +526,7 @@ def api_taldau_indicators():
 @router.post("/api/climate/run")
 async def api_climate_run(request: Request):
     """Триггерит dag_extract_weather."""
-    data      = await request.json()
+    data      = await _json_body(request)
     year_from, year_to = _years(data.get("year_from", 2020), data.get("year_to", datetime.now().year))
     districts = data.get("districts", ["all"])
     if not isinstance(districts, list) or len(districts) > 50 or not all(isinstance(d, str) and len(d) <= 64 for d in districts):
