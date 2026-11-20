@@ -121,8 +121,7 @@ func (h *DatasetHandler) mapping(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *DatasetHandler) upload(w http.ResponseWriter, r *http.Request) {
-	if err := r.ParseMultipartForm(maxUploadBytes); err != nil {
-		httputil.WriteError(w, http.StatusBadRequest, "request must be multipart/form-data")
+	if !parseUpload(w, r) {
 		return
 	}
 
@@ -655,8 +654,7 @@ func (h *DatasetHandler) uploadSLD(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	if err := r.ParseMultipartForm(maxUploadBytes); err != nil {
-		httputil.WriteError(w, http.StatusBadRequest, "request must be multipart/form-data")
+	if !parseUpload(w, r) {
 		return
 	}
 

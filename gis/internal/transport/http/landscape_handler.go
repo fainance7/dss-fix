@@ -58,8 +58,7 @@ func (h *LandscapeHandler) slots(w http.ResponseWriter, r *http.Request) {
 func (h *LandscapeHandler) uploadSlot(w http.ResponseWriter, r *http.Request) {
 	code := chi.URLParam(r, "code")
 
-	if err := r.ParseMultipartForm(maxUploadBytes); err != nil {
-		httputil.WriteError(w, http.StatusBadRequest, "request must be multipart/form-data")
+	if !parseUpload(w, r) {
 		return
 	}
 

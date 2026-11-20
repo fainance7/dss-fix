@@ -15,6 +15,9 @@ import (
 	"golang.org/x/text/encoding/charmap"
 )
 
+// MaxDBFBytes caps the decompressed size of a shapefile's .dbf (Этап 7).
+const MaxDBFBytes = 128 << 20
+
 // readDBF extracts the .dbf bytes from a zipped ESRI shapefile.
 func readDBF(data []byte) ([]byte, error) {
 	zr, err := zip.NewReader(bytes.NewReader(data), int64(len(data)))
@@ -33,15 +36,23 @@ func readDBF(data []byte) ([]byte, error) {
 		return nil, errors.New("no .dbf file found in archive")
 	}
 
+	// Этап 7 (ПТБ-17): bound the decompressed size — a few-MB archive can
+	// declare (or actually inflate to) gigabytes and exhaust memory.
+	if dbf.UncompressedSize64 > MaxDBFBytes {
+		return nil, fmt.Errorf(".dbf is too large: %d bytes (limit %d)", dbf.UncompressedSize64, MaxDBFBytes)
+	}
 	rc, err := dbf.Open()
 	if err != nil {
 		return nil, fmt.Errorf("open .dbf: %w", err)
 	}
 	defer rc.Close()
 
-	raw, err := io.ReadAll(rc)
+	raw, err := io.ReadAll(io.LimitReader(rc, MaxDBFBytes+1))
 	if err != nil {
 		return nil, fmt.Errorf("read .dbf: %w", err)
+	}
+	if int64(len(raw)) > MaxDBFBytes {
+		return nil, fmt.Errorf(".dbf is too large (limit %d bytes)", MaxDBFBytes)
 	}
 	return raw, nil
 }

@@ -26,6 +26,8 @@ func TestNewRouterAuth(t *testing.T) {
 		want         int
 	}{
 		{"/healthz", "", http.StatusOK},
+		{"/docs", "", http.StatusNotFound},
+		{"/openapi.yaml", "", http.StatusNotFound},
 		{"/categories", "", http.StatusUnauthorized},
 		{"/datasets", "wrong", http.StatusUnauthorized},
 		{"/dataset-groups", "", http.StatusUnauthorized},
@@ -40,6 +42,9 @@ func TestNewRouterAuth(t *testing.T) {
 		h.ServeHTTP(rec, req)
 		if rec.Code != tc.want {
 			t.Fatalf("%s: got %d, want %d", tc.path, rec.Code, tc.want)
+		}
+		if rec.Header().Get("X-Content-Type-Options") != "nosniff" {
+			t.Fatalf("%s: security headers missing", tc.path)
 		}
 	}
 }

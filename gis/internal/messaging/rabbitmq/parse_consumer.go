@@ -99,6 +99,19 @@ func (h jobHandler) Handle(ctx context.Context, d amqp.Delivery) error {
 	}
 	h.log.Info("processing dataset "+h.name, "dataset_id", job.DatasetID)
 
+	// Этап 7 (ПТБ-17/18): a redelivered job means the previous attempt never
+	// acked — typically the worker was killed (out of memory) while processing
+	// it. Retrying would kill the worker again in an endless loop, so the job is
+	// failed instead; an operator can re-run it with `gis reprocess`.
+	if d.Redelivered {
+		reason := "processing interrupted on a previous attempt (possible resource exhaustion); re-run with `gis reprocess` after checking the file"
+		h.log.Warn("security: redelivered dataset job rejected", "dataset_id", job.DatasetID, "job", h.name)
+		if markErr := h.proc.MarkFailed(ctx, job.DatasetID, reason); markErr != nil {
+			h.log.Error("mark dataset failed", "dataset_id", job.DatasetID, "job", h.name, "error", markErr)
+		}
+		return fmt.Errorf("redelivered %s job for dataset %s rejected", h.name, job.DatasetID)
+	}
+
 	err := h.fn(ctx, job.DatasetID)
 	if err != nil {
 		// The delivery is nacked without requeue (see Consumer.dispatch), so the

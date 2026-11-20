@@ -67,7 +67,15 @@ func (h landscapeHandler) Handle(ctx context.Context, d amqp.Delivery) error {
 	}
 	h.log.Info("processing landscape run", "run_id", job.RunID)
 
-	err := h.proc.Execute(ctx, job.RunID)
+	// Этап 7: a redelivered run was interrupted (e.g. worker killed out of
+	// memory); fail it instead of looping.
+	var err error
+	if d.Redelivered {
+		h.log.Warn("security: redelivered landscape run rejected", "run_id", job.RunID)
+		err = fmt.Errorf("run interrupted on a previous attempt (possible resource exhaustion)")
+	} else {
+		err = h.proc.Execute(ctx, job.RunID)
+	}
 	if err != nil {
 		// The delivery is nacked without requeue (see Consumer.dispatch), so the
 		// run will not be retried. Record the failure on the run itself;

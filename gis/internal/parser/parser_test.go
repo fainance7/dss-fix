@@ -1,6 +1,10 @@
 package parser
 
-import "testing"
+import (
+	"archive/zip"
+	"bytes"
+	"testing"
+)
 
 func TestColumns_GeoJSON(t *testing.T) {
 	data := []byte(`{
@@ -44,5 +48,28 @@ func TestColumns_GeoJSONNoFeatures(t *testing.T) {
 	_, err := Columns("empty.geojson", []byte(`{"type":"FeatureCollection","features":[]}`))
 	if err == nil {
 		t.Fatal("expected error for empty feature collection")
+	}
+}
+
+// Этап 7 (ПТБ-17): a zipped shapefile whose .dbf inflates past MaxDBFBytes is
+// rejected without reading it into memory.
+func TestReadDBFRejectsZipBomb(t *testing.T) {
+	var buf bytes.Buffer
+	zw := zip.NewWriter(&buf)
+	f, err := zw.Create("x.dbf")
+	if err != nil {
+		t.Fatal(err)
+	}
+	chunk := make([]byte, 1<<20)
+	for i := 0; i < int(MaxDBFBytes>>20)+2; i++ {
+		if _, err := f.Write(chunk); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := zw.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := readDBF(buf.Bytes()); err == nil {
+		t.Fatal("expected oversized .dbf to be rejected")
 	}
 }

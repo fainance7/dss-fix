@@ -7,8 +7,10 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 )
 
@@ -22,14 +24,48 @@ func NewGDALConverter() *GDALConverter {
 	return &GDALConverter{compression: "DEFLATE"}
 }
 
+// MaxRasterPixels caps width×height of an uploaded raster (Этап 7, ПТБ-18):
+// a tiny sparse GeoTIFF can declare tens of gigapixels and exhaust the worker.
+// Override with GIS_RASTER_MAX_PIXELS.
+var MaxRasterPixels int64 = 1_000_000_000
+
+func init() {
+	if v, err := strconv.ParseInt(os.Getenv("GIS_RASTER_MAX_PIXELS"), 10, 64); err == nil && v > 0 {
+		MaxRasterPixels = v
+	}
+}
+
+// checkSize rejects rasters larger than MaxRasterPixels before any heavy work.
+func checkSize(ctx context.Context, src string) error {
+	out, err := exec.CommandContext(ctx, "gdalinfo", "-json", "-nomd", "-norat", "-noct", src).Output()
+	if err != nil {
+		return fmt.Errorf("gdalinfo: %w", err)
+	}
+	var info struct {
+		Size []int64 `json:"size"`
+	}
+	if err := json.Unmarshal(out, &info); err != nil || len(info.Size) != 2 {
+		return fmt.Errorf("cannot read raster size")
+	}
+	if info.Size[0] <= 0 || info.Size[1] <= 0 || info.Size[0]*info.Size[1] > MaxRasterPixels {
+		return fmt.Errorf("raster is too large: %dx%d pixels (limit %d pixels)", info.Size[0], info.Size[1], MaxRasterPixels)
+	}
+	return nil
+}
+
 // ToCOG converts the source raster to a Cloud-Optimized GeoTIFF at dst. The COG
 // driver builds internal tiling and overviews.
 func (c *GDALConverter) ToCOG(ctx context.Context, src, dst string) error {
+	if err := checkSize(ctx, src); err != nil {
+		return err
+	}
 	cmd := exec.CommandContext(ctx, "gdal_translate",
 		"-of", "COG",
 		"-co", "COMPRESS="+c.compression,
 		src, dst,
 	)
+	// Bound GDAL's block cache so one conversion cannot take the container's memory.
+	cmd.Env = append(os.Environ(), "GDAL_CACHEMAX=256")
 	var stderr strings.Builder
 	cmd.Stderr = &stderr
 	if err := cmd.Run(); err != nil {

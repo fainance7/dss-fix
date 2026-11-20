@@ -128,6 +128,7 @@ func (a *App) Handler() stdhttp.Handler {
 		OpenAPISpec:   api.Spec,
 		APIKey:        a.Cfg.HTTP.APIKey,
 		AuthDisabled:  a.Cfg.HTTP.AuthDisabled,
+		DocsEnabled:   a.Cfg.HTTP.DocsEnabled,
 	})
 }
 

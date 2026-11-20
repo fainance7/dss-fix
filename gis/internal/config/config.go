@@ -35,6 +35,9 @@ type HTTPConfig struct {
 	// AuthDisabled turns API-key auth off. Local development only; it must
 	// never be set in a shared or production deployment (audit C-2).
 	AuthDisabled bool `env:"API_AUTH_DISABLED" envDefault:"false"`
+	// DocsEnabled serves /docs and /openapi.yaml without a key. Off by default
+	// (Этап 7): enable on a development or integration stand only.
+	DocsEnabled bool `env:"API_DOCS_ENABLED" envDefault:"false"`
 }
 
 // MinAPIKeyLen is the minimum accepted length of API_KEY.
