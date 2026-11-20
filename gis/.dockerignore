@@ -1,0 +1,6 @@
+.git
+.idea
+.env
+*.md
+deployments
+build/package/Dockerfile

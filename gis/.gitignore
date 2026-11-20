@@ -1,0 +1,6 @@
+.env
+/bin/
+/out/
+# Root-level build output only — must stay anchored so it does not match the
+# cmd/gis source directory.
+/gis
