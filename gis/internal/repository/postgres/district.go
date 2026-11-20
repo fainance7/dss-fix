@@ -63,3 +63,21 @@ func (r *DatasetRepository) DistrictGeometriesByKato(ctx context.Context, katos 
 	}
 	return out, mapError(rows.Err())
 }
+
+// DistrictExtent returns the extent (EPSG:4326) of all imported district
+// boundaries — the area of interest for import validation (Этап 7, ТЗ п. 4.4).
+func (r *DatasetRepository) DistrictExtent(ctx context.Context) ([4]float64, bool, error) {
+	var b [4]float64
+	var minx, miny, maxx, maxy *float64
+	err := r.pool.QueryRow(ctx,
+		`SELECT ST_XMin(e), ST_YMin(e), ST_XMax(e), ST_YMax(e)
+		   FROM (SELECT ST_Extent(coordinates)::box2d AS e FROM districts) t`,
+	).Scan(&minx, &miny, &maxx, &maxy)
+	if err != nil {
+		return b, false, err
+	}
+	if minx == nil {
+		return b, false, nil
+	}
+	return [4]float64{*minx, *miny, *maxx, *maxy}, true, nil
+}

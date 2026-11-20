@@ -517,6 +517,10 @@ func (s *DatasetService) ExtractProperties(ctx context.Context, id uuid.UUID) er
 		return fmt.Errorf("read dataset %s: %w", id, err) // transient
 	}
 
+	if err := s.validateVectorFile(ctx, dataset.Filename, data); err != nil {
+		return s.repo.MarkParseFailed(ctx, id, err.Error()) // permanent (ТЗ п. 4.4)
+	}
+
 	rows, err := s.parseRows(dataset.Filename, data)
 	if err != nil {
 		return s.repo.MarkParseFailed(ctx, id, err.Error()) // permanent
@@ -654,6 +658,16 @@ func (s *DatasetService) ConvertToCOG(ctx context.Context, id uuid.UUID) error {
 
 	footprint, _ := s.converter.Footprint(ctx, srcPath) // best-effort
 
+	// ТЗ п. 4.4: coordinate system and extent of the raster.
+	if err := s.checkCRS(ctx, srcPath); err != nil {
+		return s.repo.MarkParseFailed(ctx, id, err.Error())
+	}
+	if _, isProber := s.converter.(crsProber); isProber && len(footprint) > 0 {
+		if err := s.checkWithinAOI(ctx, []json.RawMessage{footprint}); err != nil {
+			return s.repo.MarkParseFailed(ctx, id, err.Error())
+		}
+	}
+
 	if err := s.converter.ToCOG(ctx, srcPath, dstPath); err != nil {
 		return s.repo.MarkParseFailed(ctx, id, err.Error()) // permanent
 	}
@@ -725,6 +739,10 @@ func (s *DatasetService) Parse(ctx context.Context, id uuid.UUID) error {
 	data, err := s.fetchObject(ctx, dataset.StorageKey)
 	if err != nil {
 		return fmt.Errorf("read dataset %s: %w", id, err) // transient; allow retry
+	}
+
+	if err := s.validateVectorFile(ctx, dataset.Filename, data); err != nil {
+		return s.repo.MarkParseFailed(ctx, id, err.Error()) // permanent (ТЗ п. 4.4)
 	}
 
 	cols, err := s.parseColumns(dataset.Filename, data)

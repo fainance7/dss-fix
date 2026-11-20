@@ -28,7 +28,7 @@ func Execute() {
 }
 
 func init() {
-	rootCmd.AddCommand(serveCmd, workerCmd, migrateCmd, reprocessCmd, importDistrictsCmd)
+	rootCmd.AddCommand(serveCmd, workerCmd, migrateCmd, reprocessCmd, importDistrictsCmd, auditCmd)
 }
 
 // signalContext returns a context cancelled on SIGINT or SIGTERM.

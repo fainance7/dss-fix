@@ -3,6 +3,7 @@ package config
 
 import (
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/caarlos0/env/v11"
@@ -38,6 +39,9 @@ type HTTPConfig struct {
 	// DocsEnabled serves /docs and /openapi.yaml without a key. Off by default
 	// (Этап 7): enable on a development or integration stand only.
 	DocsEnabled bool `env:"API_DOCS_ENABLED" envDefault:"false"`
+	// ReadKeys are optional read-only API keys (GET/HEAD only), one per
+	// consumer system that only reads data (Этап 7, ТЗ п. 4.5).
+	ReadKeys []string `env:"API_READ_KEYS" envSeparator:","`
 }
 
 // MinAPIKeyLen is the minimum accepted length of API_KEY.
@@ -55,6 +59,11 @@ func (c HTTPConfig) ValidateAuth() error {
 	}
 	if len(c.APIKey) < MinAPIKeyLen {
 		return fmt.Errorf("API_KEY is too short: need at least %d characters", MinAPIKeyLen)
+	}
+	for _, k := range c.ReadKeys {
+		if len(strings.TrimSpace(k)) < MinAPIKeyLen {
+			return fmt.Errorf("API_READ_KEYS: every key needs at least %d characters", MinAPIKeyLen)
+		}
 	}
 	return nil
 }

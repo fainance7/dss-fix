@@ -129,6 +129,17 @@ func (a *App) Handler() stdhttp.Handler {
 		APIKey:        a.Cfg.HTTP.APIKey,
 		AuthDisabled:  a.Cfg.HTTP.AuthDisabled,
 		DocsEnabled:   a.Cfg.HTTP.DocsEnabled,
+		Journal:       journalAdapter{postgres.NewSecurityJournal(a.pool)},
+		ReadKeys:      a.Cfg.HTTP.ReadKeys,
+	})
+}
+
+// journalAdapter connects the transport layer to the security journal table.
+type journalAdapter struct{ j *postgres.SecurityJournal }
+
+func (a journalAdapter) RecordEvent(ctx context.Context, e transporthttp.SecurityEvent) error {
+	return a.j.Record(ctx, postgres.SecurityEvent{
+		Event: e.Event, RemoteAddr: e.RemoteAddr, Method: e.Method, Path: e.Path, Status: e.Status, Detail: e.Detail,
 	})
 }
 

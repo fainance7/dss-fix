@@ -94,6 +94,30 @@ func (c *GDALConverter) Footprint(ctx context.Context, src string) ([]byte, erro
 	return info.Wgs84Extent, nil
 }
 
+// SourceEPSG returns the EPSG code of a raster or vector file's coordinate
+// system (Этап 7, ТЗ п. 4.4). Zipped shapefiles are read via /vsizip/.
+func (c *GDALConverter) SourceEPSG(ctx context.Context, src string) (int, error) {
+	input := src
+	if strings.EqualFold(filepath.Ext(src), ".zip") {
+		input = "/vsizip/" + src
+	}
+	out, err := exec.CommandContext(ctx, "gdalsrsinfo", "-e", input).CombinedOutput()
+	if err != nil {
+		return 0, fmt.Errorf("gdalsrsinfo: %w", err)
+	}
+	for _, line := range strings.Split(string(out), "\n") {
+		line = strings.TrimSpace(line)
+		if strings.HasPrefix(line, "EPSG:") {
+			code, err := strconv.Atoi(strings.TrimPrefix(line, "EPSG:"))
+			if err != nil || code <= 0 {
+				return 0, fmt.Errorf("unknown coordinate system")
+			}
+			return code, nil
+		}
+	}
+	return 0, fmt.Errorf("unknown coordinate system")
+}
+
 // VectorFeatures reads every feature of a vector file and returns their
 // geometries, reprojected to EPSG:4326, in file order (nil if the file has no
 // features). A feature with no geometry yields a nil entry at its index, so

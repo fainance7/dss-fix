@@ -23,6 +23,10 @@ x-app-common: &app-common
     API_DOCS_ENABLED: ${API_DOCS_ENABLED:-false}
     # Largest raster accepted for processing, width×height (Этап 7).
     GIS_RASTER_MAX_PIXELS: ${GIS_RASTER_MAX_PIXELS:-1000000000}
+    # Зона интереса для проверки загружаемых объектов (ТЗ п. 4.4); пусто — по границам районов.
+    GIS_AOI_BBOX: ${GIS_AOI_BBOX:-}
+    # Ключи только для чтения (GET), через запятую, каждый не короче 32 символов (ТЗ п. 4.5).
+    API_READ_KEYS: ${API_READ_KEYS:-}
   depends_on:
     postgres:
       condition: service_healthy
@@ -38,8 +42,10 @@ services:
   app:
     <<: *app-common
     command: ["serve"]
+    # Этап 7: API доступен только на 127.0.0.1 (наружу — через обратный прокси с TLS).
+    # Для доступа из внутренней сети задайте GIS_BIND и закройте порт межсетевым экраном.
     ports:
-      - "8080:8080"
+      - "${GIS_BIND:-127.0.0.1}:${GIS_PORT:-8080}:8080"
     volumes:
       - ../stubs:/stubs
     depends_on:
