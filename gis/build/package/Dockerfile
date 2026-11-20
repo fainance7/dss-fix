@@ -22,7 +22,8 @@ FROM alpine:3.24
 
 # gdal: shared library for godal (raster math in the worker).
 # gdal-tools: gdal_translate / gdalinfo (COG conversion) and ogr2ogr.
-RUN apk add --no-cache ca-certificates tzdata gdal gdal-tools \
+# apk upgrade: pick up security fixes released after the base image (Этап 7).
+RUN apk upgrade --no-cache && apk add --no-cache ca-certificates tzdata gdal gdal-tools \
     && adduser -D -u 10001 app
 
 WORKDIR /app
