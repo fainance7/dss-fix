@@ -49,14 +49,17 @@ func NewRouter(deps RouterDeps) http.Handler {
 	// Domain routes — always require X-API-Key unless auth was explicitly
 	// disabled for local development. An empty key with auth enabled rejects
 	// every request (fail closed) rather than leaving the API open.
-	if !deps.AuthDisabled {
-		r.Use(requireAPIKey(deps.APIKey))
-	}
-
-	r.Route("/categories", deps.Categories.Register)
-	r.Route("/datasets", deps.Datasets.Register)
-	r.Route("/dataset-groups", deps.DatasetGroups.Register)
-	r.Route("/landscape", deps.Landscape.Register)
+	// chi forbids Use() after routes on the same mux, so the key check is
+	// mounted on a route group (Этап 7: the previous form panicked at startup).
+	r.Group(func(r chi.Router) {
+		if !deps.AuthDisabled {
+			r.Use(requireAPIKey(deps.APIKey))
+		}
+		r.Route("/categories", deps.Categories.Register)
+		r.Route("/datasets", deps.Datasets.Register)
+		r.Route("/dataset-groups", deps.DatasetGroups.Register)
+		r.Route("/landscape", deps.Landscape.Register)
+	})
 
 	return r
 }
