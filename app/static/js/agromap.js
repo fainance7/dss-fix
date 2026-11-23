@@ -1,3 +1,8 @@
+// Экранирование данных внешнего источника (Agromap) перед вставкой в HTML
+function escapeHtml(s) {
+    return String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
 const LAND_TYPES = [
     { key: 'пашня', label: 'Пашня', color: '#e8c547' },
     { key: 'залежь', label: 'Залежь', color: '#e08a3c' },
@@ -143,7 +148,7 @@ async function updateStats() {
 
         const rows = data.by_type.map(t =>
             `<div style="display:flex; justify-content:space-between; padding:4px 0; border-bottom:1px solid #eee;">
-                <span>${t.object_ru}</span>
+                <span>${escapeHtml(t.object_ru)}</span>
                 <span>${formatArea(t.area_ha)}</span>
             </div>`
         ).join('');
@@ -179,7 +184,7 @@ map.on('click', 'land-polygons-fill', async (e) => {
         if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
         const data = await resp.json();
 
-        const dash = (v) => (v === null || v === undefined || v === '') ? '—' : v;
+        const dash = (v) => (v === null || v === undefined || v === '') ? '—' : escapeHtml(v);
 
         popup.setHTML(`
             <div style="font-size: 13px; line-height: 1.5;">
@@ -193,7 +198,7 @@ map.on('click', 'land-polygons-fill', async (e) => {
             </div>
         `);
     } catch (err) {
-        popup.setHTML('Ошибка загрузки данных: ' + err.message);
+        popup.setHTML('Ошибка загрузки данных: ' + escapeHtml(err.message));
         console.error('Popup fetch error:', err);
     }
 });

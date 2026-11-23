@@ -286,10 +286,10 @@ function openPreviewModal(data) {
     detectData = data;
     const rows = buildPreviewRows(data);
     previewSummary.innerHTML =
-        `Файл: <strong>${data.filename || selectedFile.name}</strong> · ` +
-        `Листов: ${data.total_sheets ?? '—'} · Блоков: ${data.total_blocks ?? '—'} · ` +
-        `Будет сохранено строк: <strong>${data.total_rows_will_be_saved ?? '—'}</strong>` +
-        (data.total_unmatched ? ` · <span style="color:var(--accent-amber)">Несопоставленных: ${data.total_unmatched}</span>` : '');
+        `Файл: <strong>${escapeHtml(data.filename || selectedFile.name)}</strong> · ` +
+        `Листов: ${escapeHtml(data.total_sheets ?? '—')} · Блоков: ${escapeHtml(data.total_blocks ?? '—')} · ` +
+        `Будет сохранено строк: <strong>${escapeHtml(data.total_rows_will_be_saved ?? '—')}</strong>` +
+        (data.total_unmatched ? ` · <span style="color:var(--accent-amber)">Несопоставленных: ${escapeHtml(data.total_unmatched)}</span>` : '');
 
     if (!rows.length) {
         previewTbody.innerHTML = '<tr><td colspan="3" style="text-align:center;color:var(--text-muted);padding:20px">Данные для превью не найдены</td></tr>';
@@ -297,7 +297,7 @@ function openPreviewModal(data) {
         previewTbody.innerHTML = rows.map(r => `
             <tr${r.katoError ? ' style="background:rgba(220,50,50,0.12)"' : ''}>
                 <td>${escapeHtml(r.period)}</td>
-                <td>${escapeHtml(r.region)}${r.katoError ? ' <span title="Регион не распознан в справочнике КАТО" style="color:#d33">&#9888;</span>' : (r.katoCode ? ` <span style="color:var(--text-muted);font-size:0.85em">(${r.katoCode})</span>` : '')}</td>
+                <td>${escapeHtml(r.region)}${r.katoError ? ' <span title="Регион не распознан в справочнике КАТО" style="color:#d33">&#9888;</span>' : (r.katoCode ? ` <span style="color:var(--text-muted);font-size:0.85em">(${escapeHtml(r.katoCode)})</span>` : '')}</td>
                 <td>${escapeHtml(String(r.value))}</td>
             </tr>
         `).join('');

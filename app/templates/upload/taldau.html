@@ -196,7 +196,7 @@ function rebuildTomSelect() {
 
     const filtered = getFilteredIndicators();
     selectEl.innerHTML = filtered.map(ind =>
-        `<option value="${ind.id}">${ind.name}</option>`
+        `<option value="${escapeAttr(ind.id)}">${escapeHtml(ind.name)}</option>`
     ).join('');
 
     indicatorTomSelect = new TomSelect('#indicator-select', {

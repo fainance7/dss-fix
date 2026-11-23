@@ -94,47 +94,47 @@ async function checkDss(name) {
 
         if (!r.ok) {
             body.innerHTML = '<div style="color:var(--accent-red)">Ошибка: '
-                           + (d.detail || r.status) + '</div>';
+                           + escapeHtml(d.detail || r.status) + '</div>';
             return;
         }
         if (d.dry_run) {
             body.innerHTML = '<div style="font-family:var(--font-mono);margin-bottom:12px">'
-                + d.filename + ' · ' + d.size_kb + ' KB</div>'
+                + escapeHtml(d.filename) + ' · ' + escapeHtml(d.size_kb) + ' KB</div>'
                 + '<div style="padding:14px;border-radius:6px;background:rgba(255,180,0,.12);'
-                + 'color:var(--accent-amber)">' + d.message + '</div>';
+                + 'color:var(--accent-amber)">' + escapeHtml(d.message) + '</div>';
             return;
         }
 
         const pct = d.rows_total ? Math.round(d.rows_ok * 100 / d.rows_total) : 0;
         let html = '<div style="font-family:var(--font-mono);margin-bottom:14px">'
-                 + d.filename + ' · ' + d.size_kb + ' KB · job ' + (d.job_id || '—') + '</div>'
+                 + escapeHtml(d.filename) + ' · ' + escapeHtml(d.size_kb) + ' KB · job ' + escapeHtml(d.job_id || '—') + '</div>'
                  + '<div style="display:flex;gap:10px;margin-bottom:16px;flex-wrap:wrap">'
                  + '<div style="flex:1;min-width:120px;padding:10px;border-radius:6px;background:rgba(128,128,128,.1)">'
                  + '<div style="font-size:11px;color:var(--text-muted)">Всего строк</div>'
-                 + '<div style="font-size:20px">' + d.rows_total + '</div></div>'
+                 + '<div style="font-size:20px">' + escapeHtml(d.rows_total) + '</div></div>'
                  + '<div style="flex:1;min-width:120px;padding:10px;border-radius:6px;background:rgba(34,160,107,.12)">'
                  + '<div style="font-size:11px;color:var(--text-muted)">Готовы к импорту</div>'
-                 + '<div style="font-size:20px;color:#22a06b">' + d.rows_ok + ' <span style="font-size:12px">(' + pct + '%)</span></div></div>'
+                 + '<div style="font-size:20px;color:#22a06b">' + escapeHtml(d.rows_ok) + ' <span style="font-size:12px">(' + pct + '%)</span></div></div>'
                  + '<div style="flex:1;min-width:120px;padding:10px;border-radius:6px;background:rgba(220,60,60,.12)">'
                  + '<div style="font-size:11px;color:var(--text-muted)">С ошибками</div>'
-                 + '<div style="font-size:20px;color:#dc3c3c">' + d.rows_invalid + '</div></div>'
+                 + '<div style="font-size:20px;color:#dc3c3c">' + escapeHtml(d.rows_invalid) + '</div></div>'
                  + '</div>';
 
         if (d.top_errors && d.top_errors.length) {
             html += '<div style="font-size:12px;color:var(--text-muted);margin-bottom:6px">Частые ошибки:</div>';
             html += d.top_errors.map(e =>
                 '<div style="padding:7px 0;border-bottom:1px solid rgba(128,128,128,.15);display:flex;gap:10px">'
-                + '<span style="flex:1">' + e[0] + '</span>'
-                + '<span style="color:var(--text-muted);white-space:nowrap">×' + e[1] + '</span></div>'
+                + '<span style="flex:1">' + escapeHtml(e[0]) + '</span>'
+                + '<span style="color:var(--text-muted);white-space:nowrap">×' + escapeHtml(e[1]) + '</span></div>'
             ).join('');
         }
         html += '<div style="margin-top:16px;padding:12px;border-radius:6px;'
               + 'background:rgba(255,180,0,.12);color:var(--accent-amber);font-size:12px">'
-              + d.note + '</div>';
+              + escapeHtml(d.note) + '</div>';
         body.innerHTML = html;
 
     } catch (e) {
-        body.innerHTML = '<div style="color:var(--accent-red)">Сбой запроса: ' + e + '</div>';
+        body.innerHTML = '<div style="color:var(--accent-red)">Сбой запроса: ' + escapeHtml(e) + '</div>';
     }
 }
 
